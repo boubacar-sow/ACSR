@@ -16,7 +16,7 @@ import pandas as pd
 from tqdm import tqdm
 from utils import load_video
 
-__author__ = "Boubacar Sow"
+__author__ = "Boubacar Sow and Hagar"
 __copyright__ = "Boubacar Sow"
 __license__ = "MIT"
 
