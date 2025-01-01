@@ -1,6 +1,7 @@
 """
 This script processes video files to extract coordinates and save them to
-individual CSV files.
+individual CSV files. It skips videos whose coordinates have already been
+extracted.
 """
 
 import argparse
@@ -38,7 +39,16 @@ def process_videos(show_video, path2data, path2output, num_videos):
     os.makedirs(path2output, exist_ok=True)
 
     for fn_video in video_paths:
-        _logger.info(f'Loading: {fn_video}')
+        # Extract video name without extension
+        video_name = os.path.basename(fn_video).split('.')[0]
+        fn_output = os.path.join(path2output, f'{video_name}_coordinates.csv')
+
+        # Skip processing if the coordinates file already exists
+        if os.path.exists(fn_output):
+            _logger.info(f'Coordinates already extracted for: {fn_video}')
+            continue
+
+        _logger.info(f'Processing: {fn_video}')
         cap = load_video(fn_video)
         df_coords = extract_coordinates(
             cap,
@@ -48,9 +58,6 @@ def process_videos(show_video, path2data, path2output, num_videos):
         )
 
         # Save coordinates to a separate CSV file for each video
-        # Extract video name without extension
-        video_name = os.path.basename(fn_video).split('.')[0]
-        fn_output = os.path.join(path2output, f'{video_name}_coordinates.csv')
         df_coords.to_csv(fn_output, index=False)
         _logger.info(f'Coordinates saved to: {fn_output}')
 
@@ -76,17 +83,15 @@ def parse_args(args):
         default=(
             r'C:\Users\bouba\Downloads\CSF22\CSF22\CSF22_train\train_videos'
         ),
-        help=(
-            "Path to video files"
-        )
+        help="Path to video files"
     )
     parser.add_argument(
-        '--path2output', default=os.path.join('ACSR', 'output',
-                                              'extracted_coordinates'),
+        '--path2output',
+        default=os.path.join('ACSR', 'output', 'extracted_coordinates'),
         help="Path to save output CSV files"
     )
     parser.add_argument(
-        '--num-videos', type=int, default=30,
+        '--num-videos', type=int, default=50,
         help="Number of videos to process (default: all)"
     )
     parser.add_argument(
