@@ -55,6 +55,7 @@ coverage.xml
 
 # data files
 data/*
+*.csv
 
 # output files
-output/*
+output/* 

@@ -120,6 +120,158 @@ def create_video_from_frames(fn_video, extracted_frames):
     return out
 
 
+def extract_coordinates(cap, fn_video, show_video=False, verbose=True):
+
+    if verbose:
+        print(f"Extracting coordinates for: {fn_video}")
+    mp_drawing = mp.solutions.drawing_utils  # Drawing helpers
+    mp_holistic = mp.solutions.holistic  # Mediapipe Solutions
+
+    columns = ["fn_video", "frame_number"]
+    num_coords_face = 468
+    num_coords_hand = 21
+
+    # generate columns names
+    for val in range(0, num_coords_face):
+        columns += [
+            "x_face{}".format(val),
+            "y_face{}".format(val),
+            "z_face{}".format(val),
+            "v_face{}".format(val),
+        ]
+
+    for val in range(0, num_coords_hand):
+        columns += [
+            "x_r_hand{}".format(val),
+            "y_r_hand{}".format(val),
+            "z_r_hand{}".format(val),
+            "v_r_hand{}".format(val),
+        ]
+
+    df_coords = pd.DataFrame(columns=columns)
+
+    n_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    if verbose:
+        print(f"Number of frames in video: {n_frames}")
+    pbar = tqdm(total=n_frames)
+
+    # Initiate holistic model
+    i_frame = 0
+    with mp_holistic.Holistic(
+        min_detection_confidence=0.5, min_tracking_confidence=0.5
+    ) as holistic:
+
+        while cap.isOpened():
+            ret, frame = cap.read()
+            i_frame += 1
+
+            if not ret:
+                break
+            # Recolor Feed
+            image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            results = holistic.process(
+                image
+            )
+
+            # Recolor image back to BGR for rendering
+            image.flags.writeable = True
+            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
+            # 4. Pose Detections
+            if show_video:
+                # Draw face landmarks
+                mp_drawing.draw_landmarks(
+                    image,
+                    results.face_landmarks,
+                    mp_holistic.FACEMESH_TESSELATION,
+                    mp_drawing.DrawingSpec(
+                        color=(80, 110, 10), thickness=1, circle_radius=1
+                    ),
+                    mp_drawing.DrawingSpec(
+                        color=(80, 256, 121), thickness=1, circle_radius=1
+                    ),
+                )
+
+                # Right hand landmarks
+                mp_drawing.draw_landmarks(
+                    image,
+                    results.right_hand_landmarks,
+                    mp_holistic.HAND_CONNECTIONS,
+                    mp_drawing.DrawingSpec(
+                        color=(80, 22, 10), thickness=2, circle_radius=4
+                    ),
+                    mp_drawing.DrawingSpec(
+                        color=(80, 44, 121), thickness=2, circle_radius=2
+                    ),
+                )
+                # Pose landmarks
+                mp_drawing.draw_landmarks(
+                    image,
+                    results.pose_landmarks,
+                    mp_holistic.POSE_CONNECTIONS,
+                    mp_drawing.DrawingSpec(
+                        color=(245, 117, 66), thickness=2, circle_radius=4
+                    ),
+                    mp_drawing.DrawingSpec(
+                        color=(245, 66, 230), thickness=2, circle_radius=2
+                    ),
+                )
+                cv2.imshow("cued_estimated", image)
+
+            # Export coordinates
+            if results.face_landmarks is not None:
+                face = results.face_landmarks.landmark
+                face_row = list(
+                    np.array(
+                        [
+                            [
+                                landmark.x, landmark.y, landmark.z,
+                                landmark.visibility
+                            ]
+                            for landmark in face
+                        ]
+                    ).flatten()
+                )
+
+            else:
+                face_row = [None] * 4
+            # Extract right hand landmarks
+            if results.right_hand_landmarks is not None:
+                r_hand = results.right_hand_landmarks.landmark
+                r_hand_row = list(
+                    np.array(
+                        [
+                            [
+                                landmark.x, landmark.y, landmark.z,
+                                landmark.visibility
+                            ]
+                            for landmark in r_hand
+                        ]
+                    ).flatten()
+                )
+            else:
+                r_hand_row = [None] * 4
+
+            # Create the row that will be written in the file
+            row = [fn_video, i_frame] + face_row + r_hand_row
+            curr_df = pd.DataFrame(dict(zip(columns, row)), index=[0])
+            # print(i_frame, curr_df)
+            df_coords = pd.concat([df_coords, curr_df], ignore_index=True)
+
+            if cv2.waitKey(10) & 0xFF == ord("q"):
+                break
+                print("WARNING!" * 5)
+                print('break due to cv2.waitKey(10) & 0xFF == ord("q"')
+            pbar.update(1)
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+    # print(len(df_coords), n_frames)
+    assert n_frames - df_coords.shape[0] <= 1
+
+    return df_coords
+
 
 def get_index_pairs(property_type):
     index_pairs = []
