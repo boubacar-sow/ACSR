@@ -28,6 +28,8 @@ mediapipe = "0.10.5"
 scikit-learn = "1.2.1"
 tox = "^4.23.2"
 torch = "^2.5.1"
+jiwer = "^3.0.5"
+levenshtein = "^0.26.1"
 
 
 [tool.poetry.group.dev.dependencies]

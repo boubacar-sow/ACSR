@@ -13,8 +13,7 @@ import os
 import sys
 import pandas as pd
 from utils import (compute_predictions, extract_class_from_fn, load_model,
-                   load_video, setup_logging, extract_coordinates,
-                   extract_features)
+                   setup_logging,)
 
 __author__ = "Boubacar Sow"
 __copyright__ = "Boubacar Sow"
@@ -105,7 +104,7 @@ def parse_args(args):
         description="Evaluate model and make predictions for all videos"
     )
     parser.add_argument(
-        '--property-type', choices=['shape', 'position'], default='shape',
+        '--property-type', choices=['shape', 'position'], default='position',
         help="Type of property (shape or position)"
     )
     parser.add_argument(
