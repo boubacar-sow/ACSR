@@ -11,12 +11,10 @@ import argparse
 import logging
 import os
 import sys
-
 import pandas as pd
-from extract_training_coordinates import extract_coordinates
-from extract_training_features import extract_features
 from utils import (compute_predictions, extract_class_from_fn, load_model,
-                   load_video, setup_logging)
+                   load_video, setup_logging, extract_coordinates,
+                   extract_features)
 
 __author__ = "Boubacar Sow"
 __copyright__ = "Boubacar Sow"
@@ -27,8 +25,8 @@ _logger = logging.getLogger(__name__)
 
 
 def main(args):
-    """Wrapper allowing the script to be called with string arguments in a CLI
-    fashion
+    """Wrapper allowing the script to be called
+        with string arguments in a CLI fashion.
 
     Args:
         args (List[str]): Command line parameters as list of strings
@@ -39,126 +37,105 @@ def main(args):
     _logger.debug("Starting evaluation...")
 
     # Load model
-    fn_model = (f'model_{args.model_type}_{args.property_type}_{args.gender}_'
-                f'{args.cropping}.pkl')
-    fn_model = os.path.join(args.path2models, fn_model)
+    fn_model = os.path.join(
+        args.path2models, f'model_{args.model_type}_{args.property_type}.pkl'
+    )
     model, feature_names = load_model(fn_model)
-    print(f'Loaded model: {fn_model}')
+    _logger.info(f'Loaded model: {fn_model}')
 
-    # Load video
-    fn_video = os.path.join(args.path2test_videos, args.fn_video)
-    if not os.path.isfile(fn_video):
-        _logger.error(f'Video file not found: {fn_video}')
-        raise FileNotFoundError('Video not found')
-    cap = load_video(fn_video)
-    print(f'Loaded video: {fn_video}')
+    # Find all feature CSV files
+    feature_files = [
+        f for f in os.listdir(args.path2features)
+        if f.endswith('_features.csv')
+    ]
+    _logger.info(f'Found {len(feature_files)} feature files to process.')
 
-    # Extract coordinates
-    print('Extracting coordinates...')
-    df_coords = extract_coordinates(cap, args.fn_video)
+    # Create predictions directory if it doesn't exist
+    predictions_dir = os.path.join(args.path2output, 'predictions')
+    os.makedirs(predictions_dir, exist_ok=True)
 
-    # Extract features
-    print('Extracting features...')
-    df_features = extract_features(df_coords)
-    if args.save_features:
-        df_coords.to_csv(os.path.join(
-            args.path2output, f'{args.fn_video[:-4]}_coordinates.csv'))
-        df_features.to_csv(os.path.join(
-            args.path2output, f'{args.fn_video[:-4]}_features.csv'))
-        print(f"Features saved to: ",
-              f"{os.path.join(args.path2output, f'{args.fn_video[:-4]}_features.csv')}")
+    for fn_feature in feature_files:
+        # Load features
+        df_features = pd.read_csv(os.path.join(args.path2features, fn_feature))
+        _logger.info(f'Loaded features from: {fn_feature}')
 
-    # Predict
-    predicted_probs, predicted_class = compute_predictions(
-        model, df_features[feature_names])
+        # Predict
+        predicted_probs, predicted_class = compute_predictions(
+            model, df_features[feature_names])
 
-    n_classes = {'position': 5, 'shape': 8}[args.property_type]
-    columns = (['frame_number', 'predicted_class'] +
-               [f'p_class_{c + 1}' for c in range(n_classes)])
-    df_predictions = pd.DataFrame(columns=columns)
+        n_classes = {'position': 5, 'shape': 8}[args.property_type]
+        columns = (['frame_number', 'predicted_class'] +
+                   [f'p_class_{c + 1}' for c in range(n_classes)])
+        df_predictions = pd.DataFrame(columns=columns)
 
-    df_predictions['frame_number'] = df_features['frame_number']
-    df_predictions['predicted_class'] = predicted_class
-    df_predictions['predicted_class'] = df_predictions.apply(
-        lambda row: extract_class_from_fn(row['predicted_class']), axis=1)
+        df_predictions['frame_number'] = df_features['frame_number']
+        df_predictions['predicted_class'] = predicted_class
+        df_predictions['predicted_class'] = df_predictions.apply(
+            lambda row: extract_class_from_fn(row['predicted_class']), axis=1)
 
-    for i_row, curr_predicted_probs in enumerate(predicted_probs):
-        if curr_predicted_probs is not None:
-            for c, p_c in enumerate(curr_predicted_probs):
-                df_predictions.loc[i_row, f'p_class_{c + 1}'] = p_c
+        for i_row, curr_predicted_probs in enumerate(predicted_probs):
+            if curr_predicted_probs is not None:
+                for c, p_c in enumerate(curr_predicted_probs):
+                    df_predictions.loc[i_row, f'p_class_{c + 1}'] = p_c
 
-    # Save predictions
-    fn_predictions = (f'predictions_{args.model_type}_{args.property_type}_'
-                      f'{args.gender}_{args.cropping}_'
-                      f'{args.fn_video[:-4]}.csv')
-    fn_predictions = os.path.join(args.path2output, fn_predictions)
-    df_predictions.to_csv(fn_predictions)
-    print(f'CSV file with predictions was saved to: {fn_predictions}')
+        # Save predictions
+        # Extract video name
+        video_name = fn_feature.replace('_features.csv', '')
+        fn_predictions = os.path.join(
+            predictions_dir,
+            f'predictions_{args.model_type}_{args.property_type}_'
+            f'{video_name}.csv'
+        )
+        df_predictions.to_csv(fn_predictions, index=False)
+        _logger.info(f'Predictions saved to: {fn_predictions}')
 
     _logger.info("Evaluation complete")
 
 
 def parse_args(args):
-    """Parse command line parameters
+    """Parse command line parameters.
 
     Args:
-        args (List[str]): Command line parameters as list of strings
+        args (List[str]): Command line parameters as list of strings.
 
     Returns:
-        argparse.Namespace: Command line parameters namespace
+        argparse.Namespace: Command line parameters namespace.
     """
     parser = argparse.ArgumentParser(
-        description="Evaluate model and make predictions using test videos"
+        description="Evaluate model and make predictions for all videos"
     )
     parser.add_argument(
-        '--gender', default='female', choices=['male', 'female'],
-        help="Gender of the data"
-    )
-    parser.add_argument(
-        '--cropping', default='cropped',
-        choices=['cropped', 'non_cropped'],
-        help="Cropping method"
-    )
-    parser.add_argument(
-        '--property-type', choices=['shape', 'position'], default='position',
+        '--property-type', choices=['shape', 'position'], default='shape',
         help="Type of property (shape or position)"
     )
     parser.add_argument(
-        '--model-type', choices=['rf', 'lr', 'rc', 'gb'], default='lr',
+        '--model-type', choices=['rf', 'lr', 'rc', 'gb'], default='rf',
         help="Model type: rf=random-forest, lr=logistic-regression"
-    )
-    parser.add_argument(
-        '--fn-video', default='test.mp4', help="Filename of the video"
     )
     parser.add_argument(
         '--path2models', default=os.path.join('ACSR', 'trained_models'),
         help="Path to trained models"
     )
     parser.add_argument(
-        '--path2test-videos',
-        default=os.path.join('ACSR', 'data', 'test_videos'),
-        help="Path to test videos"
+        '--path2features',
+        default=os.path.join('ACSR', 'output', 'extracted_features'),
+        help="Path to feature CSV files"
     )
     parser.add_argument(
         '--path2output', default=os.path.join('ACSR', 'output'),
         help="Path to save output files"
     )
     parser.add_argument(
-        '--save-features', action='store_true', default=True,
-        help="Flag to save extracted features"
-    )
-    parser.add_argument(
         '--loglevel', default='INFO',
-        help="Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)"
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help="Set the logging level"
     )
     return parser.parse_args(args)
 
 
 def run():
     """Calls :func:`main` passing the CLI arguments extracted from
-    :obj:`sys.argv`. This function can be used as entry point to create
-    console scripts with setuptools.
-    """
+    :obj:`sys.argv`."""
     main(sys.argv[1:])
 
 

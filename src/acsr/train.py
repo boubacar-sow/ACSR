@@ -20,7 +20,7 @@ from sklearn.linear_model import LogisticRegression, RidgeClassifier
 from sklearn.model_selection import GridSearchCV, KFold, cross_val_score
 from sklearn.pipeline import make_pipeline
 from sklearn.svm import LinearSVC
-from utils import setup_logging
+from utils import setup_logging, get_feature_names
 
 __author__ = "Boubacar Sow"
 __copyright__ = "Boubacar Sow"
@@ -28,41 +28,6 @@ __license__ = "MIT"
 
 # Set up a logger
 _logger = logging.getLogger(__name__)
-
-
-def get_index_pairs(property_type):
-    index_pairs = []
-    if property_type == 'shape':
-        index_pairs.extend([
-            (2, 4), (5, 8), (9, 12), (13, 16), (17, 20),
-            (4, 5), (4, 8), (8, 12), (7, 11), (6, 10)
-        ])
-    elif property_type == 'position':
-        hand_indices = [8, 9, 12]  # index and middle fingers
-        face_indices = [130, 152, 94]  # right eye, chin, nose
-        for hand_index in hand_indices:
-            for face_index in face_indices:
-                index_pairs.append((hand_index, face_index))
-    return index_pairs
-
-
-def get_feature_names(property_name):
-    feature_names = []
-    if property_name == 'position':
-        position_index_pairs = get_index_pairs('position')
-        for hand_index, face_index in position_index_pairs:
-            feature_name = (f'distance_face{face_index}_r_hand{hand_index}')
-            feature_names.append(feature_name)
-            feature_name = (f'tan_angle_face{face_index}_r_hand{hand_index}')
-            feature_names.append(feature_name)
-    elif property_name == 'shape':
-        shape_index_pairs = get_index_pairs('shape')
-        for hand_index1, hand_index2 in shape_index_pairs:
-            feature_name = (
-                f'distance_r_hand{hand_index1}_r_hand{hand_index2}'
-            )
-            feature_names.append(feature_name)
-    return feature_names
 
 
 def train_model():

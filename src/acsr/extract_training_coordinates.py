@@ -1,5 +1,6 @@
 """
-This script processes video files to extract coordinates and save them to individual CSV files.
+This script processes video files to extract coordinates and save them to
+individual CSV files.
 """
 
 import argparse
@@ -7,7 +8,6 @@ import glob
 import logging
 import os
 import sys
-import pandas as pd
 from utils import load_video, extract_coordinates
 
 __author__ = "Boubacar Sow and Hagar"
@@ -86,7 +86,7 @@ def parse_args(args):
         help="Path to save output CSV files"
     )
     parser.add_argument(
-        '--num-videos', type=int, default=2,
+        '--num-videos', type=int, default=30,
         help="Number of videos to process (default: all)"
     )
     parser.add_argument(
@@ -111,7 +111,7 @@ def setup_logging(loglevel):
 
 
 def main(args):
-    """Wrapper allowing the script to be called with string arguments in a CLI 
+    """Wrapper allowing the script to be called with string arguments in a CLI
     fashion.
 
     Args:
@@ -120,12 +120,17 @@ def main(args):
     args = parse_args(args)
     setup_logging(args.loglevel)
     _logger.debug("Starting video processing...")
-    process_videos(args.show_video, args.path2data, args.path2output, args.num_videos)
+    process_videos(
+        args.show_video, args.path2data, args.path2output, args.num_videos
+    )
     _logger.info("Script ends here")
 
 
 def run():
-    """Calls :func:`main` passing the CLI arguments extracted from :obj:`sys.argv`."""
+    """
+    Calls :func:`main` passing the CLI arguments extracted from
+    :obj:`sys.argv`.
+    """
     main(sys.argv[1:])
 
 

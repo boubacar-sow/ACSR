@@ -273,50 +273,101 @@ def extract_coordinates(cap, fn_video, show_video=False, verbose=True):
     return df_coords
 
 
+def extract_features(df_coords):
+    # create the df of relevant feature
+
+    df_features = pd.DataFrame()
+    df_features["fn_video"] = df_coords["fn_video"].copy()
+    df_features["frame_number"] = df_coords["frame_number"]
+
+    # face width to normalize the distance
+    # print('Computing face width for normalization')
+    face_width = get_distance(df_coords, "face234", "face454").mean()
+    norm_factor = face_width
+    print(f"Face width computed for normalizaiton {face_width}")
+
+    # norm_factor = None # REMOVE NORMALIZAION
+
+    # HAND-FACE DISTANCES AS FEATURES FOR POSITION DECODING
+    position_index_pairs = get_index_pairs("position")
+    for hand_index, face_index in position_index_pairs:
+        feature_name = f"distance_face{face_index}_r_hand{hand_index}"
+        # print(f'Computing {feature_name}')
+        df_features[feature_name] = get_distance(
+            df_coords,
+            f"face{face_index}",
+            f"r_hand{hand_index}",
+            norm_factor=norm_factor,
+        )
+
+        dx = get_delta_dim(
+            df_coords,
+            f"face{face_index}",
+            f"r_hand{hand_index}",
+            "x",
+            norm_factor=norm_factor,
+        )
+
+        dy = get_delta_dim(
+            df_coords,
+            f"face{face_index}",
+            f"r_hand{hand_index}",
+            "y",
+            norm_factor=norm_factor,
+        )
+
+        feature_name = f"tan_angle_face{face_index}_r_hand{hand_index}"
+        df_features[feature_name] = dx / dy
+
+    # HAND-HAND DISTANCES AS FEATURE FOR SHAPE DECODING
+    shape_index_pairs = get_index_pairs("shape")
+    for hand_index1, hand_index2 in shape_index_pairs:
+        feature_name = f"distance_r_hand{hand_index1}_r_hand{hand_index2}"
+        # print(f'Computing {feature_name}')
+        df_features[feature_name] = get_distance(
+            df_coords,
+            f"r_hand{hand_index1}",
+            f"r_hand{hand_index2}",
+            norm_factor=norm_factor,
+        )
+
+    return df_features
+
+
 def get_index_pairs(property_type):
     index_pairs = []
     if property_type == 'shape':
-        index_pairs.extend([(2, 4), (5, 8), (9, 12), (13, 16), (17, 20),
-                            (4, 5), (4, 8),
-                            (8, 12), (7, 11), (6, 10)])
-
+        index_pairs.extend([
+            (2, 4), (5, 8), (9, 12), (13, 16), (17, 20),
+            (4, 5), (4, 8), (8, 12), (7, 11), (6, 10)
+        ])
     elif property_type == 'position':
-        hand_indices = [8, 9, 12] # index and middle fingers
-
-        face_indices = [#0, # Middle Lips
-                        #61, # right side of lips
-                        #172, # right side down
-                        #234, # right side up
-                        130, # right corner of right eye
-                        152, # chin
-                        94 # nose
-                        ]
+        hand_indices = [8, 9, 12]  # index and middle fingers
+        face_indices = [130, 152, 94]  # right eye, chin, nose
         for hand_index in hand_indices:
             for face_index in face_indices:
                 index_pairs.append((hand_index, face_index))
-
     return index_pairs
 
 
 def get_feature_names(property_name):
     feature_names = []
-    # POSITION
     if property_name == 'position':
         position_index_pairs = get_index_pairs('position')
         for hand_index, face_index in position_index_pairs:
-            feature_name = f'distance_face{face_index}_r_hand{hand_index}'
+            feature_name = (f'distance_face{face_index}_r_hand{hand_index}')
             feature_names.append(feature_name)
-            feature_name = f'tan_angle_face{face_index}_r_hand{hand_index}'
+            feature_name = (f'tan_angle_face{face_index}_r_hand{hand_index}')
             feature_names.append(feature_name)
-    # SHAPE
     elif property_name == 'shape':
         shape_index_pairs = get_index_pairs('shape')
-
         for hand_index1, hand_index2 in shape_index_pairs:
-            feature_name = f'distance_r_hand{hand_index1}_r_hand{hand_index2}'
+            feature_name = (
+                f'distance_r_hand{hand_index1}_r_hand{hand_index2}'
+            )
             feature_names.append(feature_name)
-
     return feature_names
+
 
 
 
