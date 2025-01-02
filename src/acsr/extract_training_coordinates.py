@@ -91,7 +91,7 @@ def parse_args(args):
         help="Path to save output CSV files"
     )
     parser.add_argument(
-        '--num-videos', type=int, default=200,
+        '--num-videos', type=int, default=300,
         help="Number of videos to process (default: all)"
     )
     parser.add_argument(
