@@ -153,6 +153,10 @@ def extract_coordinates(cap, fn_video, show_video=False, verbose=True):
     n_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     if verbose:
         print(f"Number of frames in video: {n_frames}")
+        fps = int(cap.get(cv2.CAP_PROP_FPS))
+        print(f"Frames per second: {fps}")
+        video_length = n_frames / fps
+        print(f"Video length: {video_length} seconds")
     pbar = tqdm(total=n_frames)
 
     # Initiate holistic model
