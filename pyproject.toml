@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 [tool.poetry]
 name = "acsr"
 version = "0.1.0"
@@ -56,3 +57,22 @@ priority = "explicit"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+=======
+[project]
+name = "acsr"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Boubacar Sow"}
+]
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy (==2.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+>>>>>>> b846bf84c878a65247d176e6483be47f67189dd8

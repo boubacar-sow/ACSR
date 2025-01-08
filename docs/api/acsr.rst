@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 acsr package
 ============
 
@@ -123,3 +124,5 @@ Module contents
    :members:
    :undoc-members:
    :show-inheritance:
+=======
+>>>>>>> b846bf84c878a65247d176e6483be47f67189dd8
