@@ -36,6 +36,12 @@ moviepy = "1.0.3"
 openai-whisper = "^20240930"
 imageio = "^2.36.1"
 webrtcvad = "^2.0.10"
+montreal-forced-aligner = "2.2.17"
+pgvector = "^0.3.6"
+pynini = "^2.1.6.post1"
+hdbscan = "^0.8.40"
+sox = "^1.5.0"
+speechbrain = "^1.0.2"
 
 
 [tool.poetry.group.dev.dependencies]
