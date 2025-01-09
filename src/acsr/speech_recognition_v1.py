@@ -3,7 +3,7 @@ import subprocess
 import whisper
 import torch
 from moviepy.editor import VideoFileClip
-from epitran.backoff import Backoff
+from praatio import textgrid as tgio
 import re
 
 # Step 1: Extract audio from the video
@@ -19,71 +19,7 @@ def extract_audio(video_path, audio_path):
     print(f"Audio extracted and saved to: {audio_path}")
     return video_clip.duration  # Return the duration of the video
 
-# Step 2: Convert text to IPA
-def text_to_ipa(text, language="fra-Latn"):
-    """
-    Convert a text sentence into its IPA representation.
-    Args:
-        text (str): Input text.
-        language (str): Language code for IPA conversion (e.g., "fra-Latn" for French).
-    Returns:
-        str: IPA representation of the text.
-    """
-    backoff = Backoff([language])
-    ipa_text = backoff.transliterate(text)
-    return ipa_text
-
-# Step 3: Syllabify IPA text
-# Define Cued Speech consonants (hand shapes) and vowels (mouth shapes)
-consonants = "ptkbdgmnlrsfvzʃʒɡʁjwŋtrɥʀ"
-vowels = "aeɛioɔuyøœəɑ̃ɛ̃ɔ̃œ̃ɑ̃ɔ̃ɑ̃ɔ̃"
-
-# Regex pattern for syllabification
-syllable_pattern = re.compile(
-    f"[{consonants}]?[{vowels}]|[{consonants}]", re.IGNORECASE
-)
-
-ipa_to_arpabet = {
-    'p': 'P', 't': 'T', 'k': 'K', 'b': 'B', 'd': 'D', 'g': 'G',
-    'm': 'M', 'n': 'N', 'l': 'L', 'r': 'R', 's': 'S', 'f': 'F',
-    'v': 'V', 'z': 'Z', 'ʃ': 'SH', 'ʒ': 'ZH', 'ɡ': 'G', 'ʁ': 'RH',
-    'j': 'Y', 'w': 'W', 'ŋ': 'NG', 'tɾ': 'TR', 'ɥ': 'HW', 'ʀ': 'RR',
-    'a': 'AA', 'e': 'EY', 'ɛ': 'EH', 'i': 'IY', 'o': 'OW', 'ɔ': 'AO',
-    'u': 'UW', 'y': 'UY', 'ø': 'OE', 'œ': 'EU', 'ə': 'AH', 'ɑ̃': 'AN',
-    'ɛ̃': 'EN', 'ɔ̃': 'ON', 'œ̃': 'UN', 'ɡ': 'g', 'ʁ': 'r',
-}
-
-def syllabify_word(word):
-    """
-    Syllabify a single word based on the allowed patterns: CV, V, C.
-    """
-    syllables = syllable_pattern.findall(word)
-    return " ".join(syllables)
-
-def syllabify_sentence(sentence):
-    """
-    Syllabify an entire sentence.
-    """
-    sentence = sentence.lower()
-    sentence = text_to_ipa(sentence)
-    words = sentence.split()
-    syllabified_sentence = []
-    for word in words:
-        syllabified_sentence.append(syllabify_word(word))
-    return " ".join(syllabified_sentence)
-
-def ipa_to_arpabet(ipa_text):
-    """
-    Convert IPA text to ARPAbet phonemes.
-    Args:
-        ipa_text (str): IPA text.
-    Returns:
-        str: ARPAbet phonemes.
-    """
-    arpabet_phonemes = [ipa_to_arpabet[char] for char in ipa_text.split()]
-    return " ".join(arpabet_phonemes)
-
-# Step 4: Transcribe the entire audio using Whisper
+# Step 2: Transcribe the entire audio using Whisper
 def transcribe_audio(audio_path, device="cuda"):
     """
     Transcribes the entire audio file using OpenAI's Whisper model.
@@ -91,7 +27,7 @@ def transcribe_audio(audio_path, device="cuda"):
         audio_path (str): Path to the audio file.
         device (str): Device to use for inference ("cuda" for GPU or "cpu" for CPU).
     Returns:
-        list: A list of tuples containing (start_time, end_time, text, ipa_text, syllabified_text).
+        list: A list of tuples containing (start_time, end_time, text).
     """
     if not os.path.exists(audio_path):
         raise FileNotFoundError(f"Audio file not found: {audio_path}")
@@ -112,13 +48,11 @@ def transcribe_audio(audio_path, device="cuda"):
     segments = []
     for segment in result["segments"]:
         text = segment["text"]
-        ipa_text = text_to_ipa(text)  # Convert text to IPA
-        syllabified_text = syllabify_sentence(ipa_text)  # Syllabify IPA text
-        segments.append((segment["start"], segment["end"], text, ipa_text, syllabified_text))
+        segments.append((segment["start"], segment["end"], text))
     
     return segments
 
-# Step 5: Align audio to text using MFA (command-line)
+# Step 3: Align audio to text using MFA (command-line)
 def align_audio_to_text(audio_path, text, output_dir):
     """
     Align audio to text using Montreal Forced Aligner (MFA).
@@ -160,11 +94,79 @@ def align_audio_to_text(audio_path, text, output_dir):
     # Return the path to the TextGrid file
     return os.path.join(output_dir, f"{os.path.splitext(audio_filename)[0]}.TextGrid")
 
+# Step 4: Construct syllables from the TextGrid file
+def construct_syllables(textgrid_path):
+    """
+    Construct syllables from the TextGrid file using a manual approach.
+    Args:
+        textgrid_path (str): Path to the TextGrid file.
+    Returns:
+        dict: A dictionary mapping syllables to their intervals.
+    """
+    # Define Cued Speech consonants and vowels
+    consonants = "ptkbdgmnlrsfvzʃʒɡʁjwŋtrɥgʀyc"
+    vowels = "aeɛioɔuøœəɑ̃ɛ̃ɔ̃œ̃ɑ̃ɔ̃ɑ̃ɔ̃"
+
+    # Load the TextGrid file
+    tg = tgio.openTextgrid(textgrid_path, includeEmptyIntervals=False)
+
+    # Get the "phones" tier
+    phone_tier = tg.getTier("phones")
+
+    # Construct syllables
+    syllables = {}
+    i = 0
+    syllable_count = 0  # Counter to ensure unique syllable keys
+
+    while i < len(phone_tier.entries):
+        start, end, phone = phone_tier.entries[i]
+
+        # If the current phone is a vowel, treat it as a syllable
+        if phone in vowels:
+            syllable_key = f"{phone}_{syllable_count}"  # Add a unique identifier
+            syllables[syllable_key] = (start, end)
+            syllable_count += 1
+            i += 1
+
+        # If the current phone is a consonant, check the next phone
+        elif phone in consonants:
+            # Check if there is a next phone
+            if i + 1 < len(phone_tier.entries):
+                next_start, next_end, next_phone = phone_tier.entries[i + 1]
+
+                # If the next phone is a vowel, combine into a CV syllable
+                if next_phone in vowels:
+                    syllable = phone + next_phone
+                    syllable_key = f"{syllable}_{syllable_count}"  # Add a unique identifier
+                    syllables[syllable_key] = (start, next_end)
+                    syllable_count += 1
+                    i += 2  # Skip the next phone since it's part of the syllable
+
+                # If the next phone is not a vowel, treat the consonant as a standalone syllable
+                else:
+                    syllable_key = f"{phone}_{syllable_count}"  # Add a unique identifier
+                    syllables[syllable_key] = (start, end)
+                    syllable_count += 1
+                    i += 1
+
+            # If there is no next phone, treat the consonant as a standalone syllable
+            else:
+                syllable_key = f"{phone}_{syllable_count}"  # Add a unique identifier
+                syllables[syllable_key] = (start, end)
+                syllable_count += 1
+                i += 1
+
+        # If the phone is neither a consonant nor a vowel, skip it
+        else:
+            print("Skipping phone:", phone)
+            i += 1
+
+    return syllables
 
 # Main function
 def main():
     # File paths
-    video_path = "/scratch2/bsow/Documents/ACSR/data/training_videos/sent_01.mp4"
+    video_path = "/scratch2/bsow/Documents/ACSR/data/videos/cinema.mp4"
     audio_path = "/scratch2/bsow/Documents/ACSR/data/transcriptions/output_audio.wav"
     output_dir = "/scratch2/bsow/Documents/ACSR/data/transcriptions"
 
@@ -173,12 +175,20 @@ def main():
 
     # Step 2: Transcribe the audio using Whisper
     segments = transcribe_audio(audio_path)
-
+    print("Transcription segments:")
+    print(segments)
     # Step 3: Align audio to text using MFA
     for segment in segments:
-        start_time, end_time, text, ipa_text, syllabified_text = segment
+        start_time, end_time, text = segment
         alignment_output = align_audio_to_text(audio_path, text, output_dir)
+        #alignment_output = "/scratch2/bsow/Documents/ACSR/data/transcriptions/output_audio.TextGrid"
         print(f"Alignment saved to: {alignment_output}")
+
+        # Step 4: Construct syllables from the TextGrid file
+        syllables = construct_syllables(alignment_output)
+        print("Syllables and their intervals:")
+        for syllable, interval in syllables.items():
+            print(f"{syllable.split('_')[0]}: {interval}")
 
 if __name__ == "__main__":
     main()
