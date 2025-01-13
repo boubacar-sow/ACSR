@@ -173,6 +173,7 @@ def construct_syllables(textgrid_path):
 
     while i < len(phone_tier.entries):
         start, end, phone = phone_tier.entries[i]
+        print(start, end, phone)
 
         # If the current phone is a vowel, treat it as a syllable
         if phone in vowels:
@@ -187,15 +188,15 @@ def construct_syllables(textgrid_path):
             if i + 1 < len(phone_tier.entries):
                 next_start, next_end, next_phone = phone_tier.entries[i + 1]
 
-                # If the next phone is a vowel, combine into a CV syllable
-                if next_phone in vowels:
+                # Check if the next phone is a vowel and consecutive in time
+                if (next_phone in vowels or next_phone == "y") and abs(end - next_start) < 0.01:  # Allow small time gap
                     syllable = phone + next_phone
                     syllable_key = f"{syllable}_{syllable_count}"  # Add a unique identifier
                     syllables[syllable_key] = (start, next_end)
                     syllable_count += 1
                     i += 2  # Skip the next phone since it's part of the syllable
 
-                # If the next phone is not a vowel, treat the consonant as a standalone syllable
+                # If the next phone is not a vowel or not consecutive, treat the consonant as a standalone syllable
                 else:
                     syllable_key = f"{phone}_{syllable_count}"  # Add a unique identifier
                     syllables[syllable_key] = (start, end)
@@ -230,24 +231,42 @@ def map_syllable_to_cue(syllable):
     consonants = set("ptkbdgmnlrsfvzʃʒɡʁjwŋtrɥgʀyc")
 
     # Check if the syllable is CV, C, or V
-    if len(syllable) == 2:  # CV syllable
-        consonant, vowel = syllable[0], syllable[1]
+    if len(syllable) == 2 or len(syllable)==3:  # CV syllable or for bɔ̃, jɛ̃, dɑ̃ (encoding issus that makes them 3 characters)
+        if len(syllable)==3:
+            consonant, vowel = syllable[0], syllable[1:]
+        else:
+            consonant, vowel = syllable[0], syllable[1]
+        if len(vowel)==2:  # for bɔ̃, jɛ̃, dɑ̃ (encoding issus that makes them 3 characters)
+            hand_shape = consonant_to_handshape.get(consonant, 1)  # Default to Hand Shape 1
+            if vowel[0] == "ɔ":
+                hand_position = vowel_positions.get("ɔ̃", (0.1, 0.15, 0.0))  # Default to Position 3
+            elif vowel[0] == "ɛ":
+                hand_position = vowel_positions.get("ɛ̃", (0.2, 0.05, 0.0))  # Default to Position 2
+            elif vowel[0] == "ɑ":
+                hand_position = vowel_positions.get("ɑ̃", (0.1, 0.15, 0.0))
+            print(f"Mapping syllable {syllable} to Hand Shape {hand_shape} and Position {hand_position}")
+            return hand_shape, hand_position
+        
         if consonant in consonants and vowel in vowels:
             hand_shape = consonant_to_handshape.get(consonant, 1)  # Default to Hand Shape 1
             hand_position = vowel_positions.get(vowel, (0.15, 0.1, 0.0))  # Default to Position 1
+            print(f"Mapping syllable {syllable} to Hand Shape {hand_shape} and Position {hand_position}")
             return hand_shape, hand_position
 
     elif len(syllable) == 1:  # Single letter (C or V)
         if syllable in consonants:  # Single consonant
             hand_shape = consonant_to_handshape.get(syllable, 1)  # Default to Hand Shape 1
             hand_position = vowel_positions["a"]  # Default to Position 1
+            print(f"Mapping syllable {syllable} to Hand Shape {hand_shape} and Position {hand_position}")
             return hand_shape, hand_position
         elif syllable in vowels:  # Single vowel
             hand_shape = 5  # Default to Hand Shape 5
             hand_position = vowel_positions.get(syllable, (0.15, 0.1, 0.0))  # Default to Position 1
+            print(f"Mapping syllable {syllable} to Hand Shape {hand_shape} and Position {hand_position}")
             return hand_shape, hand_position
 
     # Default fallback
+    print(f"Mapping syllable {syllable}, len syllabe = {len(syllable)}, syllabe[0]={syllable[0]}, syllabe[1]={syllable[1]}, syllabe[2]={syllable[2]},  to Hand Shape 1 and Position 1")
     return 1, (0.15, 0.1, 0.0)  # Hand Shape 1, Position 1
 
 def load_hand_landmarks(hand_shape):
@@ -401,11 +420,11 @@ def add_audio_to_video(video_path, audio_path, output_path):
 # Main function (updated rendering logic)
 def main():
     # File paths
-    video_path = "/scratch2/bsow/Documents/ACSR/data/videos/cinema.mp4"
+    video_path = "/scratch2/bsow/Documents/ACSR/data/videos/example_video2.mp4"
     audio_path = "/scratch2/bsow/Documents/ACSR/data/transcriptions/output_audio.wav"
     output_dir = "/scratch2/bsow/Documents/ACSR/data/transcriptions"
-    rendered_video_path = "/scratch2/bsow/Documents/ACSR/data/videos/cinema_cued.mp4"
-    final_video_path = "/scratch2/bsow/Documents/ACSR/data/videos/cinema_cued_with_audio.mp4"
+    rendered_video_path = "/scratch2/bsow/Documents/ACSR/data/videos/cued_speech_video.mp4"
+    final_video_path = "/scratch2/bsow/Documents/ACSR/data/videos/cued_speech_video_with_audio2.mp4"
 
     # Step 1: Extract audio from the video
     video_duration = extract_audio(video_path, audio_path)
