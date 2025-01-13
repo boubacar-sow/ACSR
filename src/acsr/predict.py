@@ -12,6 +12,7 @@ import logging
 import os
 import sys
 import pandas as pd
+import pickle
 from utils import (compute_predictions, extract_class_from_fn, load_model,
                    setup_logging,)
 
@@ -39,6 +40,7 @@ def main(args):
     fn_model = os.path.join(
         args.path2models, f'model_{args.model_type}_{args.property_type}.pkl'
     )
+    print(load_model(fn_model))
     model, feature_names = load_model(fn_model)
     _logger.info(f'Loaded model: {fn_model}')
 
@@ -53,10 +55,37 @@ def main(args):
     predictions_dir = os.path.join(args.path2output, 'predictions')
     os.makedirs(predictions_dir, exist_ok=True)
 
-    for fn_feature in feature_files:
+    # Find all frame-to-predict files
+    frames_to_predict_files = [
+        f for f in os.listdir(args.frames_to_predict)
+        if f.endswith('.txt')
+    ]
+    _logger.info(f'Found {len(frames_to_predict_files)} frame-to-predict files to process.')
+
+    # Process each frame-to-predict file
+    for fn_frames_to_predict in frames_to_predict_files:
+        # Extract video name from the frame-to-predict file
+        video_name = os.path.splitext(fn_frames_to_predict)[0]
+        _logger.info(f'Processing video: {video_name}')
+
+        # Find the corresponding features file
+        fn_feature = f"{video_name}_features.csv"
+        if fn_feature not in feature_files:
+            _logger.warning(f"No features file found for video: {video_name}")
+            continue
+
+        # Load frames to predict
+        frames_to_predict_path = os.path.join(args.frames_to_predict, fn_frames_to_predict)
+        with open(frames_to_predict_path, "r") as f:
+            frames_to_predict = [int(line.strip()) for line in f.readlines()]
+        _logger.info(f"Frames to predict: {frames_to_predict}")
+
         # Load features
         df_features = pd.read_csv(os.path.join(args.path2features, fn_feature))
         _logger.info(f'Loaded features from: {fn_feature}')
+
+        # Filter frames to predict
+        df_features = df_features[df_features['frame_number'].isin(frames_to_predict)]
 
         # Predict
         predicted_probs, predicted_class = compute_predictions(
@@ -69,17 +98,17 @@ def main(args):
 
         df_predictions['frame_number'] = df_features['frame_number']
         df_predictions['predicted_class'] = predicted_class
-        df_predictions['predicted_class'] = df_predictions.apply(
-            lambda row: extract_class_from_fn(row['predicted_class']), axis=1)
 
         for i_row, curr_predicted_probs in enumerate(predicted_probs):
             if curr_predicted_probs is not None:
                 for c, p_c in enumerate(curr_predicted_probs):
                     df_predictions.loc[i_row, f'p_class_{c + 1}'] = p_c
 
+        # Add zeros for frames not predicted
+        all_frames = pd.DataFrame({'frame_number': frames_to_predict})
+        df_predictions = pd.merge(all_frames, df_predictions, on='frame_number', how='left').fillna(0)
+
         # Save predictions
-        # Extract video name
-        video_name = fn_feature.replace('_features.csv', '')
         fn_predictions = os.path.join(
             predictions_dir,
             f'predictions_{args.model_type}_{args.property_type}_'
@@ -104,7 +133,7 @@ def parse_args(args):
         description="Evaluate model and make predictions for all videos"
     )
     parser.add_argument(
-        '--property-type', choices=['shape', 'position'], default='position',
+        '--property-type', choices=['shape', 'position'], default='shape',
         help="Type of property (shape or position)"
     )
     parser.add_argument(
@@ -112,17 +141,32 @@ def parse_args(args):
         help="Model type: rf=random-forest, lr=logistic-regression"
     )
     parser.add_argument(
-        '--path2models', default=os.path.join('ACSR', 'trained_models'),
+        '--path2models', 
+        default=(
+            r"/scratch2/bsow/Documents/ACSR/output/saved_models"
+        ),
         help="Path to trained models"
     )
     parser.add_argument(
         '--path2features',
-        default=os.path.join('ACSR', 'output', 'extracted_features'),
+        default=(
+            r"/scratch2/bsow/Documents/ACSR/output/extracted_features"
+        ),
         help="Path to feature CSV files"
     )
     parser.add_argument(
-        '--path2output', default=os.path.join('ACSR', 'output'),
+        '--path2output', 
+        default=(
+            r"/scratch2/bsow/Documents/ACSR/output"
+        ),
         help="Path to save output files"
+    )
+    parser.add_argument(
+        '--frames-to-predict', type=str, 
+        default=(
+            r"/scratch2/bsow/Documents/ACSR/data/training_videos/frames_to_predict"
+        ),
+        help="Path to the directory containing frame-to-predict files"
     )
     parser.add_argument(
         '--loglevel', default='INFO',

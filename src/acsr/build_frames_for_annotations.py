@@ -11,11 +11,15 @@ video_dir = "/scratch2/bsow/Documents/ACSR/data/training_videos/videos"
 audio_dir = "/scratch2/bsow/Documents/ACSR/data/training_videos/audio"
 textgrid_dir = "/scratch2/bsow/Documents/ACSR/data/training_videos/textgrids"
 annotation_dir = "/scratch2/bsow/Documents/ACSR/data/training_videos/annotations"
+frames_to_predict_dir = "/scratch2/bsow/Documents/ACSR/data/training_videos/frames_to_predict"
+lpc_dir = "/scratch2/bsow/Documents/ACSR/data/training_videos/lpc"
 
 # Create directories if they don't exist
 os.makedirs(audio_dir, exist_ok=True)
 os.makedirs(textgrid_dir, exist_ok=True)
 os.makedirs(annotation_dir, exist_ok=True)
+os.makedirs(frames_to_predict_dir, exist_ok=True)
+os.makedirs(lpc_dir, exist_ok=True)
 
 # Load Whisper model (use GPU if available)
 whisper_model = whisper.load_model("medium", device="cuda" if torch.cuda.is_available() else "cpu")
@@ -141,11 +145,28 @@ def construct_syllables(textgrid_path):
 
     return syllables
 
+# Function to save syllables to an .lpc file
+def save_syllables_to_lpc(syllables, video_name):
+    """
+    Save syllables to an .lpc file.
+    Args:
+        syllables (dict): Dictionary of syllables and their intervals.
+        video_name (str): Name of the video (e.g., "sent_01").
+    """
+    lpc_path = os.path.join(lpc_dir, f"{video_name}.lpc")
+    with open(lpc_path, "w") as f:
+        for syllable_key, (start, end) in syllables.items():
+            f.write(f"{syllable_key} {start} {end}\n")
+    print(f"Syllables saved to: {lpc_path}")
+
 # Function to extract frames from the middle of each syllable interval
 def extract_frames_from_syllables(video_path, syllables, output_dir):
     # Open the video
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS)
+
+    # List to store frame indices
+    frame_indices = []
 
     # Iterate through syllable intervals
     for syllable_key, (start_time, end_time) in syllables.items():
@@ -155,30 +176,36 @@ def extract_frames_from_syllables(video_path, syllables, output_dir):
 
         # Determine the frames to extract
         if num_frames >= 3:
-            frame_indices = [start_frame + num_frames // 2]
+            frame_indices.append(start_frame + num_frames // 2)
         elif num_frames == 2:
-            frame_indices = [start_frame+1]
+            frame_indices.append(start_frame + 1)
         elif num_frames == 1:
-            frame_indices = [start_frame]
-        else:
-            continue
+            frame_indices.append(start_frame)
 
-        # Extract and save the frames
+    # Save frame indices to a text file
+    video_name = os.path.splitext(os.path.basename(video_path))[0]
+    frames_to_predict_path = os.path.join(frames_to_predict_dir, f"{video_name}.txt")
+    with open(frames_to_predict_path, "w") as f:
         for frame_idx in frame_indices:
-            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-            ret, frame = cap.read()
-            if ret:
-                frame_filename = f"frame_{frame_idx}.jpg"
-                frame_path = os.path.join(output_dir, frame_filename)
-                cv2.imwrite(frame_path, frame)
-                print(f"Frame saved: {frame_path}")
+            f.write(f"{frame_idx}\n")
+    print(f"Frame indices saved to: {frames_to_predict_path}")
+
+    # Extract and save the frames
+    for frame_idx in frame_indices:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+        ret, frame = cap.read()
+        if ret:
+            frame_filename = f"frame_{frame_idx}.jpg"
+            frame_path = os.path.join(output_dir, frame_filename)
+            cv2.imwrite(frame_path, frame)
+            print(f"Frame saved: {frame_path}")
 
     cap.release()
 
 # Main function
 def main():
     # Iterate through all videos from sent_01.mp4 to sent_30.mp4
-    for i in range(1, 31):
+    for i in range(1, 16):
         video_filename = f"sent_{i:02d}.mp4"
         video_path = os.path.join(video_dir, video_filename)
         audio_path = os.path.join(audio_dir, f"sent_{i:02d}.wav")
@@ -198,7 +225,11 @@ def main():
         # Step 4: Construct syllables from the TextGrid file
         syllables = construct_syllables(textgrid_path)
 
-        # Step 5: Extract frames from syllable intervals
+        # Step 5: Save syllables to an .lpc file
+        video_name = os.path.splitext(os.path.basename(video_path))[0]
+        save_syllables_to_lpc(syllables, video_name)
+
+        # Step 6: Extract frames from syllable intervals and save frame indices
         extract_frames_from_syllables(video_path, syllables, annotation_video_dir)
 
 if __name__ == "__main__":

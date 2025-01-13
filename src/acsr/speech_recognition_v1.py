@@ -471,10 +471,7 @@ def main():
                     # Load the hand landmarks for the specified hand shape
                     hand_data = load_hand_landmarks(hand_shape)
                     hand_landmarks = hand_data["hand_landmarks"]
-
-                    # Step 1: Mirror the hand landmarks horizontally
-                    hand_landmarks = mirror_hand_landmarks(hand_landmarks)
-
+                    
                     # Step 2: Align the hand to the nose
                     adjusted_landmarks = adjust_hand_to_nose(hand_landmarks, nose_landmarks)
 

@@ -67,12 +67,16 @@ def parse_args(args):
     )
     parser.add_argument(
         '--path2coordinates',
-        default=os.path.join('ACSR', 'output', 'extracted_coordinates_mp4'),
+        default=(
+          r"/scratch2/bsow/Documents/ACSR/output/extracted_coordinates"  
+        ),
         help="Path to coordinate CSV files"
     )
     parser.add_argument(
         '--path2output',
-        default=os.path.join('ACSR', 'output', 'extracted_features_mp4'),
+        default=(
+            r"/scratch2/bsow/Documents/ACSR/output/extracted_features"
+        ),
         help="Path to save feature CSV files"
     )
     parser.add_argument(

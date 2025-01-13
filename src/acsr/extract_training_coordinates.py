@@ -81,17 +81,19 @@ def parse_args(args):
     parser.add_argument(
         '--path2data',
         default=(
-            r"C:\Users\bouba\Documents\csf22_mp4"
+            r"/scratch2/bsow/Documents/ACSR/data/training_videos/"
         ),
         help="Path to video files"
     )
     parser.add_argument(
         '--path2output',
-        default=os.path.join('ACSR', 'output', 'extracted_coordinates_mp4'),
+        default=(
+            r"/scratch2/bsow/Documents/ACSR/output/extracted_coordinates"
+        ),
         help="Path to save output CSV files"
     )
     parser.add_argument(
-        '--num-videos', type=int, default=10,
+        '--num-videos', type=int, default=50,
         help="Number of videos to process (default: all)"
     )
     parser.add_argument(
