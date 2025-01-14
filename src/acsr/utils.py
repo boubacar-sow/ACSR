@@ -162,7 +162,12 @@ def extract_coordinates(cap, fn_video, show_video=False, verbose=True):
     # Initiate holistic model
     i_frame = 0
     with mp_holistic.Holistic(
-        min_detection_confidence=0.5, min_tracking_confidence=0.5
+        min_detection_confidence=0.5, min_tracking_confidence=0.5,
+        static_image_mode=False,  # Set to False for video processing
+        model_complexity=1,  # Adjust model complexity (0=light, 1=medium, 2=heavy)
+        enable_segmentation=False,  # Disable segmentation for faster processing
+        smooth_landmarks=True,  # Smooth landmarks for better tracking
+        refine_face_landmarks=True # Refine face landmarks for better accuracy
     ) as holistic:
 
         while cap.isOpened():
@@ -278,62 +283,47 @@ def extract_coordinates(cap, fn_video, show_video=False, verbose=True):
 
 
 def extract_features(df_coords):
-    # create the df of relevant feature
-
     df_features = pd.DataFrame()
     df_features["fn_video"] = df_coords["fn_video"].copy()
     df_features["frame_number"] = df_coords["frame_number"]
 
-    # face width to normalize the distance
-    # print('Computing face width for normalization')
+    # Normalization factor (face width)
     face_width = get_distance(df_coords, "face234", "face454").mean()
     norm_factor = face_width
-    print(f"Face width computed for normalizaiton {face_width}")
+    print(f"Face width computed for normalization: {face_width}")
 
-    # norm_factor = None # REMOVE NORMALIZAION
-
-    # HAND-FACE DISTANCES AS FEATURES FOR POSITION DECODING
+    # HAND-FACE DISTANCES AND ANGLES
     position_index_pairs = get_index_pairs("position")
     for hand_index, face_index in position_index_pairs:
         feature_name = f"distance_face{face_index}_r_hand{hand_index}"
-        # print(f'Computing {feature_name}')
         df_features[feature_name] = get_distance(
-            df_coords,
-            f"face{face_index}",
-            f"r_hand{hand_index}",
-            norm_factor=norm_factor,
+            df_coords, f"face{face_index}", f"r_hand{hand_index}", norm_factor=norm_factor
         )
 
-        dx = get_delta_dim(
-            df_coords,
-            f"face{face_index}",
-            f"r_hand{hand_index}",
-            "x",
-            norm_factor=norm_factor,
-        )
+        dx = get_delta_dim(df_coords, f"face{face_index}", f"r_hand{hand_index}", "x", norm_factor=norm_factor)
+        dy = get_delta_dim(df_coords, f"face{face_index}", f"r_hand{hand_index}", "y", norm_factor=norm_factor)
+        df_features[f"tan_angle_face{face_index}_r_hand{hand_index}"] = dx / dy
 
-        dy = get_delta_dim(
-            df_coords,
-            f"face{face_index}",
-            f"r_hand{hand_index}",
-            "y",
-            norm_factor=norm_factor,
-        )
-
-        feature_name = f"tan_angle_face{face_index}_r_hand{hand_index}"
-        df_features[feature_name] = dx / dy
-
-    # HAND-HAND DISTANCES AS FEATURE FOR SHAPE DECODING
+    # HAND-HAND DISTANCES
     shape_index_pairs = get_index_pairs("shape")
     for hand_index1, hand_index2 in shape_index_pairs:
         feature_name = f"distance_r_hand{hand_index1}_r_hand{hand_index2}"
-        # print(f'Computing {feature_name}')
         df_features[feature_name] = get_distance(
-            df_coords,
-            f"r_hand{hand_index1}",
-            f"r_hand{hand_index2}",
-            norm_factor=norm_factor,
+            df_coords, f"r_hand{hand_index1}", f"r_hand{hand_index2}", norm_factor=norm_factor
         )
+
+    # FINGER ANGLES
+    df_features["thumb_index_angle"] = get_angle(
+        df_coords["r_hand4"], df_coords["r_hand0"], df_coords["r_hand8"]
+    )
+
+    # LIP FEATURES
+    df_features["lip_width"] = get_distance(df_coords, "face61", "face291", norm_factor=norm_factor)
+    df_features["lip_height"] = get_distance(df_coords, "face0", "face17", norm_factor=norm_factor)
+
+    # RELATIVE MOTION
+    df_features["r_hand8_velocity_x"] = df_coords["r_hand8_x"].diff()
+    df_features["r_hand8_velocity_y"] = df_coords["r_hand8_y"].diff()
 
     return df_features
 
@@ -373,7 +363,12 @@ def get_feature_names(property_name):
     return feature_names
 
 
-
+def get_angle(p1, p2, p3):
+    # Calculate the angle between three points (p1, p2, p3)
+    v1 = p1 - p2
+    v2 = p3 - p2
+    cosine_angle = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+    return np.arccos(cosine_angle)
 
 
 def setup_logging(loglevel):

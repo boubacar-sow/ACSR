@@ -28,7 +28,7 @@ def process_videos(show_video, path2data, path2output, num_videos):
         num_videos (int): Number of videos to process.
     """
     # Find all video paths
-    video_paths = glob.glob(os.path.join(path2data, "*", "*.mp4"))
+    video_paths = glob.glob(os.path.join(path2data, "*.mp4"))
     video_paths.sort()  # Sort alphabetically
 
     # Limit the number of videos to process
@@ -44,9 +44,9 @@ def process_videos(show_video, path2data, path2output, num_videos):
         fn_output = os.path.join(path2output, f'{video_name}_coordinates.csv')
 
         # Skip processing if the coordinates file already exists
-        #if os.path.exists(fn_output):
-        #    _logger.info(f'Coordinates already extracted for: {fn_video}')
-        #    continue
+        if os.path.exists(fn_output):
+            _logger.info(f'Coordinates already extracted for: {fn_video}')
+            continue
 
         _logger.info(f'Processing: {fn_video}')
         cap = load_video(fn_video)
@@ -81,7 +81,7 @@ def parse_args(args):
     parser.add_argument(
         '--path2data',
         default=(
-            r"/scratch2/bsow/Documents/ACSR/data/training_videos/"
+            r"/scratch2/bsow/Documents/ACSR/data/training_videos/videos"
         ),
         help="Path to video files"
     )
@@ -93,7 +93,7 @@ def parse_args(args):
         help="Path to save output CSV files"
     )
     parser.add_argument(
-        '--num-videos', type=int, default=50,
+        '--num-videos', type=int, default=100,
         help="Number of videos to process (default: all)"
     )
     parser.add_argument(

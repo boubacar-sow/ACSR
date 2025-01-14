@@ -205,7 +205,7 @@ def extract_frames_from_syllables(video_path, syllables, output_dir):
 # Main function
 def main():
     # Iterate through all videos from sent_01.mp4 to sent_30.mp4
-    for i in range(1, 16):
+    for i in range(51, 100):
         video_filename = f"sent_{i:02d}.mp4"
         video_path = os.path.join(video_dir, video_filename)
         audio_path = os.path.join(audio_dir, f"sent_{i:02d}.wav")
