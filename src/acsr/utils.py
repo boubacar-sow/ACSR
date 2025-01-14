@@ -121,35 +121,42 @@ def create_video_from_frames(fn_video, extracted_frames):
 
 
 def extract_coordinates(cap, fn_video, show_video=False, verbose=True):
+    """
+    Extract hand and lip landmarks from a video using MediaPipe Holistic.
 
+    Args:
+        cap: Video capture object.
+        fn_video (str): Name of the video file.
+        show_video (bool): Whether to display the video with landmarks.
+        verbose (bool): Whether to print progress information.
+
+    Returns:
+        pd.DataFrame: DataFrame containing hand and lip landmarks for each frame.
+    """
     if verbose:
         print(f"Extracting coordinates for: {fn_video}")
-    mp_drawing = mp.solutions.drawing_utils  # Drawing helpers
-    mp_holistic = mp.solutions.holistic  # Mediapipe Solutions
+    
+    # Initialize MediaPipe Holistic
+    mp_holistic = mp.solutions.holistic
 
+    # Define columns for the DataFrame
     columns = ["fn_video", "frame_number"]
-    num_coords_face = 468
-    num_coords_hand = 21
 
-    # generate columns names
-    for val in range(0, num_coords_face):
-        columns += [
-            "x_face{}".format(val),
-            "y_face{}".format(val),
-            "z_face{}".format(val),
-            "v_face{}".format(val),
-        ]
+    # Add columns for hand landmarks (21 keypoints, x, y, z)
+    for i in range(21):
+        columns += [f"hand_x{i}", f"hand_y{i}", f"hand_z{i}"]
 
-    for val in range(0, num_coords_hand):
-        columns += [
-            "x_r_hand{}".format(val),
-            "y_r_hand{}".format(val),
-            "z_r_hand{}".format(val),
-            "v_r_hand{}".format(val),
-        ]
+    # Add columns for lip landmarks (40 keypoints, x, y, z)
+    for i in range(40):
+        columns += [f"lip_x{i}", f"lip_y{i}", f"lip_z{i}"]
 
+    # Add columns for hand position (x, y, z)
+    columns += ["hand_pos_x", "hand_pos_y", "hand_pos_z"]
+
+    # Initialize DataFrame
     df_coords = pd.DataFrame(columns=columns)
 
+    # Get video properties
     n_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     if verbose:
         print(f"Number of frames in video: {n_frames}")
@@ -167,7 +174,7 @@ def extract_coordinates(cap, fn_video, show_video=False, verbose=True):
         model_complexity=1,  # Adjust model complexity (0=light, 1=medium, 2=heavy)
         enable_segmentation=False,  # Disable segmentation for faster processing
         smooth_landmarks=True,  # Smooth landmarks for better tracking
-        refine_face_landmarks=True # Refine face landmarks for better accuracy
+        refine_face_landmarks=True  # Refine face landmarks for better accuracy
     ) as holistic:
 
         while cap.isOpened():
@@ -176,107 +183,66 @@ def extract_coordinates(cap, fn_video, show_video=False, verbose=True):
 
             if not ret:
                 break
+
             # Recolor Feed
             image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            results = holistic.process(
-                image
-            )
+            results = holistic.process(image)
 
             # Recolor image back to BGR for rendering
             image.flags.writeable = True
             image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
 
-            # 4. Pose Detections
+            # Draw landmarks on the frame (optional)
             if show_video:
-                # Draw face landmarks
-                mp_drawing.draw_landmarks(
-                    image,
-                    results.face_landmarks,
-                    mp_holistic.FACEMESH_TESSELATION,
-                    mp_drawing.DrawingSpec(
-                        color=(80, 110, 10), thickness=1, circle_radius=1
-                    ),
-                    mp_drawing.DrawingSpec(
-                        color=(80, 256, 121), thickness=1, circle_radius=1
-                    ),
+                mp.solutions.drawing_utils.draw_landmarks(
+                    image, results.face_landmarks, mp_holistic.FACEMESH_TESSELATION
                 )
-
-                # Right hand landmarks
-                mp_drawing.draw_landmarks(
-                    image,
-                    results.right_hand_landmarks,
-                    mp_holistic.HAND_CONNECTIONS,
-                    mp_drawing.DrawingSpec(
-                        color=(80, 22, 10), thickness=2, circle_radius=4
-                    ),
-                    mp_drawing.DrawingSpec(
-                        color=(80, 44, 121), thickness=2, circle_radius=2
-                    ),
-                )
-                # Pose landmarks
-                mp_drawing.draw_landmarks(
-                    image,
-                    results.pose_landmarks,
-                    mp_holistic.POSE_CONNECTIONS,
-                    mp_drawing.DrawingSpec(
-                        color=(245, 117, 66), thickness=2, circle_radius=4
-                    ),
-                    mp_drawing.DrawingSpec(
-                        color=(245, 66, 230), thickness=2, circle_radius=2
-                    ),
+                mp.solutions.drawing_utils.draw_landmarks(
+                    image, results.right_hand_landmarks, mp_holistic.HAND_CONNECTIONS
                 )
                 cv2.imshow("cued_estimated", image)
 
-            # Export coordinates
-            if results.face_landmarks is not None:
-                face = results.face_landmarks.landmark
-                face_row = list(
-                    np.array(
-                        [
-                            [
-                                landmark.x, landmark.y, landmark.z,
-                                landmark.visibility
-                            ]
-                            for landmark in face
-                        ]
-                    ).flatten()
-                )
-
+            # Extract hand landmarks
+            hand_landmarks = []
+            if results.right_hand_landmarks:
+                for landmark in results.right_hand_landmarks.landmark:
+                    hand_landmarks.extend([landmark.x, landmark.y, landmark.z])
             else:
-                face_row = [None] * 4
-            # Extract right hand landmarks
-            if results.right_hand_landmarks is not None:
-                r_hand = results.right_hand_landmarks.landmark
-                r_hand_row = list(
-                    np.array(
-                        [
-                            [
-                                landmark.x, landmark.y, landmark.z,
-                                landmark.visibility
-                            ]
-                            for landmark in r_hand
-                        ]
-                    ).flatten()
-                )
-            else:
-                r_hand_row = [None] * 4
+                hand_landmarks.extend([None] * 63)  # 21 keypoints × 3 coordinates
 
-            # Create the row that will be written in the file
-            row = [fn_video, i_frame] + face_row + r_hand_row
-            curr_df = pd.DataFrame(dict(zip(columns, row)), index=[0])
-            # print(i_frame, curr_df)
+            # Extract lip landmarks (subset of face landmarks)
+            lip_landmarks = []
+            if results.face_landmarks:
+                # Lip landmarks are typically indices 61-100 in the face landmarks
+                for i in range(61, 101):
+                    landmark = results.face_landmarks.landmark[i]
+                    lip_landmarks.extend([landmark.x, landmark.y, landmark.z])
+            else:
+                lip_landmarks.extend([None] * 120)  # 40 keypoints × 3 coordinates
+
+            # Extract hand position (wrist landmark)
+            hand_position = []
+            if results.right_hand_landmarks:
+                wrist = results.right_hand_landmarks.landmark[0]  # Wrist landmark
+                hand_position.extend([wrist.x, wrist.y, wrist.z])
+            else:
+                hand_position.extend([None] * 3)
+
+            # Create the row for the DataFrame
+            row = [fn_video, i_frame] + hand_landmarks + lip_landmarks + hand_position
+            curr_df = pd.DataFrame([row], columns=columns)
             df_coords = pd.concat([df_coords, curr_df], ignore_index=True)
 
+            # Break the loop if 'q' is pressed
             if cv2.waitKey(10) & 0xFF == ord("q"):
                 break
-                print("WARNING!" * 5)
-                print('break due to cv2.waitKey(10) & 0xFF == ord("q"')
+
             pbar.update(1)
 
     cap.release()
     cv2.destroyAllWindows()
 
-    # print(len(df_coords), n_frames)
+    # Verify that all frames were processed
     assert n_frames - df_coords.shape[0] <= 1
 
     return df_coords
