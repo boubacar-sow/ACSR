@@ -147,11 +147,12 @@ def extract_coordinates(cap, fn_video, show_video=False, verbose=True):
         columns += [f"hand_x{i}", f"hand_y{i}", f"hand_z{i}"]
 
     # Add columns for lip landmarks (40 keypoints, x, y, z)
-    for i in range(40):
+    for i in range(39):
         columns += [f"lip_x{i}", f"lip_y{i}", f"lip_z{i}"]
 
     # Add columns for hand position (x, y, z)
-    columns += ["hand_pos_x", "hand_pos_y", "hand_pos_z"]
+    for i in range(21):
+        columns += [f"hand_pos_x{i}", f"hand_pos_y{i}", f"hand_pos_z{i}"]
 
     # Initialize DataFrame
     df_coords = pd.DataFrame(columns=columns)
@@ -214,19 +215,26 @@ def extract_coordinates(cap, fn_video, show_video=False, verbose=True):
             lip_landmarks = []
             if results.face_landmarks:
                 # Lip landmarks are typically indices 61-100 in the face landmarks
-                for i in range(61, 101):
+                lip_indices = [17, 314, 405, 321, 375, 291, 84, 181, 91, 146, 
+                               0, 267, 269, 270, 409, 40, 37, 39, 40, 185, 
+                               61, 78, 95, 88, 87, 14, 317, 402, 324, 308, 
+                               80, 81, 82, 13, 312, 311, 319, 414, 308] # 39
+                
+                for i in lip_indices:
                     landmark = results.face_landmarks.landmark[i]
                     lip_landmarks.extend([landmark.x, landmark.y, landmark.z])
             else:
-                lip_landmarks.extend([None] * 120)  # 40 keypoints × 3 coordinates
+                lip_landmarks.extend([None] * 117)  # 40 keypoints × 3 coordinates
 
             # Extract hand position (wrist landmark)
             hand_position = []
             if results.right_hand_landmarks:
-                wrist = results.right_hand_landmarks.landmark[0]  # Wrist landmark
-                hand_position.extend([wrist.x, wrist.y, wrist.z])
+                hand_indices = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+                for i in hand_indices:
+                    wrist = results.right_hand_landmarks.landmark[0]
+                    hand_position.extend([wrist.x, wrist.y, wrist.z])
             else:
-                hand_position.extend([None] * 3)
+                hand_position.extend([None] * 63)
 
             # Create the row for the DataFrame
             row = [fn_video, i_frame] + hand_landmarks + lip_landmarks + hand_position

@@ -24,29 +24,29 @@ consonant_to_handshape = {
 # Define vowel positions relative to the nose (right side of the face/body)
 vowel_positions = {
     # Position 1: /a/, /o/, /œ/, /ə/
-    "a": (-0.15, 0.1, 0.0),   # Right side of the mouth
-    "o": (-0.15, 0.1, 0.0),   # Same as /a/
-    "œ": (-0.15, 0.1, 0.0),   # Same as /a/
-    "ə": (-0.15, 0.1, 0.0),   # Same as /a/
+    "a": -1, #(-0.15, 0.1, 0.0),   # Right side of the mouth
+    "o": -1, #(-0.15, 0.1, 0.0),   # Same as /a/
+    "œ": -1, #(-0.15, 0.1, 0.0),   # Same as /a/
+    "ə": -1, #(-0.15, 0.1, 0.0),   # Same as /a/
 
     # Position 2: /ɛ̃/, /ø/
-    "ɛ̃": (-0.2, 0.05, 0.0),   # Right cheek
-    "ø": (-0.2, 0.05, 0.0),   # Same as /ɛ̃/
+    "ɛ̃": 118,   # Right cheek
+    "ø": 118,   # Same as /ɛ̃/
 
     # Position 3: /i/, /ɔ̃/, /ɑ̃/
-    "i": (-0.1, 0.15, 0.0),   # Right corner of the mouth
-    "ɔ̃": (-0.1, 0.15, 0.0),   # Same as /i/
-    "ɑ̃": (-0.1, 0.15, 0.0),   # Same as /i/
+    "i": 57,   # Right corner of the mouth, mediapipe 118
+    "ɔ̃": 57,   # Same as /i/
+    "ɑ̃": 57,   # Same as /i/
 
     # Position 4: /u/, /ɛ/, /ɔ/
-    "u": (-0.0, 0.2, 0.0),    # Chin (below the mouth)
-    "ɛ": (-0.0, 0.2, 0.0),    # Same as /u/
-    "ɔ": (-0.0, 0.2, 0.0),    # Same as /u/
+    "u": 175,    # Chin (below the mouth)
+    "ɛ": 175,    # Same as /u/
+    "ɔ": 175,    # Same as /u/
 
     # Position 5: /œ̃/, /y/, /e/
-    "œ̃": (-0.0, 0.3, 0.0),    # Throat (below the chin)
-    "y": (-0.0, 0.3, 0.0),    # Same as /œ̃/
-    "e": (-0.0, 0.3, 0.0),    # Same as /œ̃/
+    "œ̃": -2, #(-0.0, 0.3, 0.0),    # Throat (below the chin)
+    "y": -2, #(-0.0, 0.3, 0.0),    # Same as /œ̃/
+    "e": -2, #(-0.0, 0.3, 0.0),    # Same as /œ̃/
 }
 
 HAND_CONNECTIONS = [
@@ -239,11 +239,11 @@ def map_syllable_to_cue(syllable):
         if len(vowel)==2:  # for bɔ̃, jɛ̃, dɑ̃ (encoding issus that makes them 3 characters)
             hand_shape = consonant_to_handshape.get(consonant, 1)  # Default to Hand Shape 1
             if vowel[0] == "ɔ":
-                hand_position = vowel_positions.get("ɔ̃", (0.1, 0.15, 0.0))  # Default to Position 3
+                hand_position = vowel_positions.get("ɔ̃", 57)  # Default to Position 3
             elif vowel[0] == "ɛ":
-                hand_position = vowel_positions.get("ɛ̃", (0.2, 0.05, 0.0))  # Default to Position 2
+                hand_position = vowel_positions.get("ɛ̃", 118)  # Default to Position 2
             elif vowel[0] == "ɑ":
-                hand_position = vowel_positions.get("ɑ̃", (0.1, 0.15, 0.0))
+                hand_position = vowel_positions.get("ɑ̃", 57)
             return hand_shape, hand_position
         
         if consonant in consonants and vowel in vowels:
@@ -280,9 +280,9 @@ def load_hand_landmarks(hand_shape):
     with open(landmarks_path, "r") as f:
         return json.load(f)
 
-def calculate_face_scale(face_landmarks):
+def calculate_face_scale(face_landmarks, reference_face_bbox):
     """
-    Calculate the scale of the face based on the bounding box of the face landmarks.
+    Calculate the scale factor based on the face bounding box.
     Args:
         face_landmarks: MediaPipe face landmarks.
     Returns:
@@ -300,12 +300,56 @@ def calculate_face_scale(face_landmarks):
     face_size = (face_width + face_height) / 2
 
     # Define a reference face size (empirically determined for a "normal" face size)
-    reference_face_size = 0.5  # Adjust this based on your use case
+    ref_face_width =  reference_face_bbox["x_max"] - reference_face_bbox["x_min"]
+    ref_face_height = reference_face_bbox["y_max"] - reference_face_bbox["y_min"]
+    reference_face_size = (ref_face_width + ref_face_height) / 2
 
     # Calculate the scale factor
     scale_factor = face_size / reference_face_size
-
     return scale_factor
+
+
+def adjust_hand_to_vowel(hand_landmarks, face_landmarks, vowel_position, face_bbox, scale_factor=1.0):
+    """
+    Adjust the hand landmarks to the specified vowel position.
+    Args:
+        hand_landmarks (list): List of hand landmarks.
+        nose_landmarks (list): Nose coordinates.
+        vowel_position (tuple): (x, y, z) offset relative to the nose.
+        face_bbox (dict): Face bounding box with left, right, top, bottom coordinates.
+        scale_factor (float): Scale factor for the hand.
+    Returns:
+        list: Adjusted hand landmarks.
+    """
+    # Calculate the target position for the reference finger
+    if vowel_position == -1:
+        target_x, target_y, target_z = face_landmarks.landmark[57].x - 0.06, face_landmarks.landmark[57].y, face_landmarks.landmark[57].z 
+    elif vowel_position == -2:
+        target_x, target_y, target_z = face_landmarks.landmark[118].x, face_landmarks.landmark[118].y + 0.04, face_landmarks.landmark[118].z
+    else:
+        target_x =  face_landmarks.landmark[vowel_position].x 
+        target_y = face_landmarks.landmark[vowel_position].y
+        target_z = face_landmarks.landmark[vowel_position].z
+
+    # Choose the reference finger
+    reference_landmark_idx = choose_reference_finger(hand_landmarks)
+    reference_landmark = hand_landmarks[reference_landmark_idx]
+
+    # Calculate the offset to move the reference landmark to the target position
+    offset_x = target_x - reference_landmark[0]*scale_factor*0.45
+    offset_y = target_y - reference_landmark[1]*scale_factor*0.45
+    offset_z = target_z - reference_landmark[2]*scale_factor*0.45
+
+    # Adjust all hand landmarks by the offset
+    adjusted_landmarks = []
+    for landmark in hand_landmarks:
+        adjusted_landmarks.append([
+            landmark[0]*scale_factor*0.45 + offset_x,
+            landmark[1]*scale_factor*0.45 + offset_y,
+            landmark[2]*scale_factor*0.45 + offset_z,
+        ])
+
+    return adjusted_landmarks
 
 def render_hand(frame, hand_landmarks, scale_factor=1.0):
     """
@@ -319,9 +363,9 @@ def render_hand(frame, hand_landmarks, scale_factor=1.0):
     scaled_landmarks = []
     for landmark in hand_landmarks:
         scaled_landmarks.append([
-            landmark[0] * scale_factor,
-            landmark[1] * scale_factor,
-            landmark[2] * scale_factor,
+            landmark[0] ,#* scale_factor,
+            landmark[1] ,#* scale_factor,
+            landmark[2] ,#* scale_factor,
         ])
 
     # Draw the landmarks
@@ -335,7 +379,6 @@ def render_hand(frame, hand_landmarks, scale_factor=1.0):
         start_x, start_y = int(scaled_landmarks[start_idx][0] * frame.shape[1]), int(scaled_landmarks[start_idx][1] * frame.shape[0])
         end_x, end_y = int(scaled_landmarks[end_idx][0] * frame.shape[1]), int(scaled_landmarks[end_idx][1] * frame.shape[0])
         cv2.line(frame, (start_x, start_y), (end_x, end_y), (255, 0, 0), 2)  # Blue lines for connections
-
 
 def choose_reference_finger(hand_landmarks):
     """
@@ -359,70 +402,6 @@ def choose_reference_finger(hand_landmarks):
             reference_landmark_idx = idx
 
     return reference_landmark_idx
-
-def adjust_hand_to_nose(hand_landmarks, nose_landmarks, scale_factor=1.0):
-    """
-    Adjust the hand landmarks so that the reference finger aligns with the nose.
-    Args:
-        hand_landmarks (list): List of hand landmarks.
-        nose_landmarks (list): Nose coordinates.
-    Returns:
-        list: Adjusted hand landmarks.
-    """
-    # Choose the reference finger
-    reference_landmark_idx = choose_reference_finger(hand_landmarks)
-    reference_landmark = hand_landmarks[reference_landmark_idx]
-
-    # Calculate the offset to move the reference landmark to the nose
-    offset_x = (nose_landmarks[0] - reference_landmark[0]) * scale_factor
-    offset_y = (nose_landmarks[1] - reference_landmark[1]) * scale_factor
-    offset_z = (nose_landmarks[2] - reference_landmark[2]) * scale_factor
-
-    # Adjust all hand landmarks by the offset
-    adjusted_landmarks = []
-    for landmark in hand_landmarks:
-        adjusted_landmarks.append([
-            landmark[0] + offset_x,
-            landmark[1] + offset_y,
-            landmark[2] + offset_z,
-        ])
-
-    return adjusted_landmarks
-
-def adjust_hand_to_vowel(hand_landmarks, nose_landmarks, vowel_position, scale_factor=1.0):
-    """
-    Adjust the hand landmarks to the specified vowel position.
-    Args:
-        hand_landmarks (list): List of hand landmarks.
-        nose_landmarks (list): Nose coordinates.
-        vowel_position (tuple): (x, y, z) offset relative to the nose.
-    Returns:
-        list: Adjusted hand landmarks.
-    """
-    # Calculate the target position for the reference finger
-    target_x = nose_landmarks[0] + vowel_position[0] * scale_factor
-    target_y = nose_landmarks[1] + vowel_position[1] * scale_factor
-    target_z = nose_landmarks[2] + vowel_position[2] * scale_factor
-
-    # Choose the reference finger
-    reference_landmark_idx = choose_reference_finger(hand_landmarks)
-    reference_landmark = hand_landmarks[reference_landmark_idx]
-
-    # Calculate the offset to move the reference landmark to the target position
-    offset_x = target_x - reference_landmark[0]
-    offset_y = target_y - reference_landmark[1]
-    offset_z = target_z - reference_landmark[2]
-
-    # Adjust all hand landmarks by the offset
-    adjusted_landmarks = []
-    for landmark in hand_landmarks:
-        adjusted_landmarks.append([
-            landmark[0] + offset_x,
-            landmark[1] + offset_y,
-            landmark[2] + offset_z,
-        ])
-
-    return adjusted_landmarks
 
 from moviepy.editor import VideoFileClip, AudioFileClip
 
@@ -508,8 +487,6 @@ def main():
                     face_landmarks.landmark[1].z,
                 ]
 
-                # Calculate the face scale
-                scale_factor = calculate_face_scale(face_landmarks)
 
                 # Find the current syllable based on the frame count
                 current_time = frame_count / fps
@@ -524,14 +501,15 @@ def main():
                     hand_shape, hand_position = map_syllable_to_cue(current_syllable)
 
                     # Load the hand landmarks for the specified hand shape
-                    hand_data = load_hand_landmarks(hand_shape)
-                    hand_landmarks = hand_data["hand_landmarks"]
-                    
-                    # Step 2: Align the hand to the nose
-                    adjusted_landmarks = adjust_hand_to_nose(hand_landmarks, nose_landmarks, scale_factor)
+                    hand_and_ref_data = load_hand_landmarks(hand_shape)
+                    hand_landmarks = hand_and_ref_data["hand_landmarks"]
+                    reference_face_bbox = hand_and_ref_data["face_bbox"]
 
+                    # Calculate the face scale
+                    scale_factor = calculate_face_scale(face_landmarks, reference_face_bbox)
+                    
                     # Step 3: Adjust the hand to the vowel position
-                    adjusted_landmarks = adjust_hand_to_vowel(adjusted_landmarks, nose_landmarks, hand_position, scale_factor)
+                    adjusted_landmarks = adjust_hand_to_vowel(hand_landmarks, face_landmarks, hand_position, scale_factor)
 
                     # Render the hand on the frame with scaling
                     render_hand(frame, adjusted_landmarks, scale_factor)

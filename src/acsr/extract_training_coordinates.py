@@ -1,14 +1,9 @@
-"""
-This script processes video files to extract coordinates and save them to
-individual CSV files. It skips videos whose coordinates have already been
-extracted.
-"""
-
 import argparse
 import glob
 import logging
 import os
 import sys
+from multiprocessing import Pool, cpu_count
 from utils import load_video, extract_coordinates
 
 __author__ = "Boubacar Sow and Hagar"
@@ -18,8 +13,43 @@ __license__ = "MIT"
 _logger = logging.getLogger(__name__)
 
 
+def process_single_video(fn_video, path2output, show_video):
+    """Process a single video file and extract coordinates.
+
+    Args:
+        fn_video (str): Path to the video file.
+        path2output (str): Path to the directory to save the output CSV file.
+        show_video (bool): Whether to display the video during processing.
+
+    Returns:
+        str: Path to the output CSV file.
+    """
+    # Extract video name without extension
+    video_name = os.path.basename(fn_video).split('.')[0]
+    fn_output = os.path.join(path2output, f'{video_name}_coordinates.csv')
+
+    # Skip processing if the coordinates file already exists
+    if os.path.exists(fn_output):
+        _logger.info(f'Coordinates already extracted for: {fn_video}')
+        return fn_output
+
+    _logger.info(f'Processing: {fn_video}')
+    cap = load_video(fn_video)
+    df_coords = extract_coordinates(
+        cap,
+        os.path.basename(fn_video),
+        show_video=show_video,
+        verbose=True
+    )
+
+    # Save coordinates to a separate CSV file for each video
+    df_coords.to_csv(fn_output, index=False)
+    _logger.info(f'Coordinates saved to: {fn_output}')
+    return fn_output
+
+
 def process_videos(show_video, path2data, path2output, num_videos):
-    """Process video files and extract coordinates.
+    """Process video files and extract coordinates using multiprocessing.
 
     Args:
         show_video (bool): Whether to display the video during processing.
@@ -28,7 +58,7 @@ def process_videos(show_video, path2data, path2output, num_videos):
         num_videos (int): Number of videos to process.
     """
     # Find all video paths
-    video_paths = glob.glob(os.path.join(path2data, "*.mp4"))
+    video_paths = glob.glob(os.path.join(path2data, "*", "*.mp4"))
     video_paths.sort()  # Sort alphabetically
 
     # Limit the number of videos to process
@@ -38,28 +68,15 @@ def process_videos(show_video, path2data, path2output, num_videos):
     # Create output directory if it doesn't exist
     os.makedirs(path2output, exist_ok=True)
 
-    for fn_video in video_paths:
-        # Extract video name without extension
-        video_name = os.path.basename(fn_video).split('.')[0]
-        fn_output = os.path.join(path2output, f'{video_name}_coordinates.csv')
-
-        # Skip processing if the coordinates file already exists
-        if os.path.exists(fn_output):
-            _logger.info(f'Coordinates already extracted for: {fn_video}')
-            continue
-
-        _logger.info(f'Processing: {fn_video}')
-        cap = load_video(fn_video)
-        df_coords = extract_coordinates(
-            cap,
-            os.path.basename(fn_video),
-            show_video=show_video,
-            verbose=True
+    # Use multiprocessing to process videos in parallel
+    print("Cpu count: ", cpu_count())
+    with Pool(processes=8) as pool:
+        results = pool.starmap(
+            process_single_video,
+            [(fn_video, path2output, show_video) for fn_video in video_paths]
         )
 
-        # Save coordinates to a separate CSV file for each video
-        df_coords.to_csv(fn_output, index=False)
-        _logger.info(f'Coordinates saved to: {fn_output}')
+    _logger.info(f"Processed {len(results)} videos.")
 
 
 def parse_args(args):
@@ -81,7 +98,7 @@ def parse_args(args):
     parser.add_argument(
         '--path2data',
         default=(
-            r"/scratch2/bsow/Documents/ACSR/data/training_videos/videos"
+            r"/scratch2/bsow/Documents/ACSR/data/training_videos/CSF22_train/mp4"
         ),
         help="Path to video files"
     )
@@ -93,7 +110,7 @@ def parse_args(args):
         help="Path to save output CSV files"
     )
     parser.add_argument(
-        '--num-videos', type=int, default=100,
+        '--num-videos', type=int, default=1000,
         help="Number of videos to process (default: all)"
     )
     parser.add_argument(
