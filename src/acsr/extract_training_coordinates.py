@@ -70,7 +70,9 @@ def process_videos(show_video, path2data, path2output, num_videos):
 
     # Use multiprocessing to process videos in parallel
     print("Cpu count: ", cpu_count())
-    with Pool(processes=8) as pool:
+    import time
+    time.sleep(5)   
+    with Pool(processes=4) as pool:
         results = pool.starmap(
             process_single_video,
             [(fn_video, path2output, show_video) for fn_video in video_paths]

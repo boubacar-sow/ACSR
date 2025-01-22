@@ -122,7 +122,7 @@ def create_video_from_frames(fn_video, extracted_frames):
 
 def extract_coordinates(cap, fn_video, show_video=False, verbose=True):
     """
-    Extract hand and lip landmarks from a video using MediaPipe Holistic.
+    Extract hand, lip, and specific face landmarks from a video using MediaPipe Holistic.
 
     Args:
         cap: Video capture object.
@@ -131,7 +131,7 @@ def extract_coordinates(cap, fn_video, show_video=False, verbose=True):
         verbose (bool): Whether to print progress information.
 
     Returns:
-        pd.DataFrame: DataFrame containing hand and lip landmarks for each frame.
+        pd.DataFrame: DataFrame containing hand, lip, and specific face landmarks for each frame.
     """
     if verbose:
         print(f"Extracting coordinates for: {fn_video}")
@@ -142,17 +142,25 @@ def extract_coordinates(cap, fn_video, show_video=False, verbose=True):
     # Define columns for the DataFrame
     columns = ["fn_video", "frame_number"]
 
+    # Define real indices for lip, hand, and specific face landmarks
+    lip_indices = [17, 314, 405, 321, 375, 291, 84, 181, 91, 146, 
+                   0, 267, 269, 270, 409, 40, 37, 39, 40, 185, 
+                   61, 78, 95, 88, 87, 14, 317, 402, 324, 308, 
+                   80, 81, 82, 13, 312, 311, 319, 414, 308]  # 39 lip landmarks
+    hand_indices = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]  # 21 hand landmarks
+    face_indices = [454, 234, 200, 214, 50]  # Specific face landmarks
+
     # Add columns for hand landmarks (21 keypoints, x, y, z)
-    for i in range(21):
+    for i in hand_indices:
         columns += [f"hand_x{i}", f"hand_y{i}", f"hand_z{i}"]
 
-    # Add columns for lip landmarks (40 keypoints, x, y, z)
-    for i in range(39):
+    # Add columns for lip landmarks (39 keypoints, x, y, z)
+    for i in lip_indices:
         columns += [f"lip_x{i}", f"lip_y{i}", f"lip_z{i}"]
 
-    # Add columns for hand position (x, y, z)
-    for i in range(21):
-        columns += [f"hand_pos_x{i}", f"hand_pos_y{i}", f"hand_pos_z{i}"]
+    # Add columns for specific face landmarks (x, y, z)
+    for i in face_indices:
+        columns += [f"face_x{i}", f"face_y{i}", f"face_z{i}"]
 
     # Initialize DataFrame
     df_coords = pd.DataFrame(columns=columns)
@@ -206,38 +214,32 @@ def extract_coordinates(cap, fn_video, show_video=False, verbose=True):
             # Extract hand landmarks
             hand_landmarks = []
             if results.right_hand_landmarks:
-                for landmark in results.right_hand_landmarks.landmark:
+                for i in hand_indices:
+                    landmark = results.right_hand_landmarks.landmark[i]
                     hand_landmarks.extend([landmark.x, landmark.y, landmark.z])
             else:
-                hand_landmarks.extend([None] * 63)  # 21 keypoints × 3 coordinates
+                hand_landmarks.extend([None] * len(hand_indices)*3)  # 21 keypoints × 3 coordinates
 
             # Extract lip landmarks (subset of face landmarks)
             lip_landmarks = []
             if results.face_landmarks:
-                # Lip landmarks are typically indices 61-100 in the face landmarks
-                lip_indices = [17, 314, 405, 321, 375, 291, 84, 181, 91, 146, 
-                               0, 267, 269, 270, 409, 40, 37, 39, 40, 185, 
-                               61, 78, 95, 88, 87, 14, 317, 402, 324, 308, 
-                               80, 81, 82, 13, 312, 311, 319, 414, 308] # 39
-                
                 for i in lip_indices:
                     landmark = results.face_landmarks.landmark[i]
                     lip_landmarks.extend([landmark.x, landmark.y, landmark.z])
             else:
-                lip_landmarks.extend([None] * 117)  # 40 keypoints × 3 coordinates
+                lip_landmarks.extend([None] * len(lip_indices)*3)  # 39 keypoints × 3 coordinates
 
-            # Extract hand position (wrist landmark)
-            hand_position = []
-            if results.right_hand_landmarks:
-                hand_indices = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
-                for i in hand_indices:
-                    wrist = results.right_hand_landmarks.landmark[0]
-                    hand_position.extend([wrist.x, wrist.y, wrist.z])
+            # Extract specific face landmarks (face_454 and face_234)
+            face_specific_landmarks = []
+            if results.face_landmarks:
+                for i in face_indices:
+                    landmark = results.face_landmarks.landmark[i]
+                    face_specific_landmarks.extend([landmark.x, landmark.y, landmark.z])
             else:
-                hand_position.extend([None] * 63)
+                face_specific_landmarks.extend([None] * len(face_indices)*3)  # 2 keypoints × 3 coordinates
 
             # Create the row for the DataFrame
-            row = [fn_video, i_frame] + hand_landmarks + lip_landmarks + hand_position
+            row = [fn_video, i_frame] + hand_landmarks + lip_landmarks + face_specific_landmarks
             curr_df = pd.DataFrame([row], columns=columns)
             df_coords = pd.concat([df_coords, curr_df], ignore_index=True)
 
@@ -255,63 +257,108 @@ def extract_coordinates(cap, fn_video, show_video=False, verbose=True):
 
     return df_coords
 
-
 def extract_features(df_coords):
+    """
+    Extract features from the coordinates DataFrame.
+
+    Args:
+        df_coords (pd.DataFrame): DataFrame containing hand, lip, and face landmarks.
+
+    Returns:
+        pd.DataFrame: DataFrame containing computed features.
+    """
     df_features = pd.DataFrame()
     df_features["fn_video"] = df_coords["fn_video"].copy()
     df_features["frame_number"] = df_coords["frame_number"]
 
     # Normalization factor (face width)
-    face_width = get_distance(df_coords, "face234", "face454").mean()
+    face_width = get_distance(df_coords, "face_x454", "face_x234").mean()
     norm_factor = face_width
     print(f"Face width computed for normalization: {face_width}")
 
     # HAND-FACE DISTANCES AND ANGLES
     position_index_pairs = get_index_pairs("position")
     for hand_index, face_index in position_index_pairs:
-        feature_name = f"distance_face{face_index}_r_hand{hand_index}"
+        feature_name = f"distance_face{face_index}_hand{hand_index}"
         df_features[feature_name] = get_distance(
-            df_coords, f"face{face_index}", f"r_hand{hand_index}", norm_factor=norm_factor
+            df_coords, f"face_x{face_index}", f"hand_x{hand_index}", norm_factor=norm_factor
         )
 
-        dx = get_delta_dim(df_coords, f"face{face_index}", f"r_hand{hand_index}", "x", norm_factor=norm_factor)
-        dy = get_delta_dim(df_coords, f"face{face_index}", f"r_hand{hand_index}", "y", norm_factor=norm_factor)
-        df_features[f"tan_angle_face{face_index}_r_hand{hand_index}"] = dx / dy
+        dx = get_delta_dim(df_coords, f"face_x{face_index}", f"hand_x{hand_index}", "x", norm_factor=norm_factor)
+        dy = get_delta_dim(df_coords, f"face_x{face_index}", f"hand_x{hand_index}", "y", norm_factor=norm_factor)
+        df_features[f"tan_angle_face{face_index}_hand{hand_index}"] = dx / dy
 
-    # HAND-HAND DISTANCES
+    # HAND-HAND DISTANCES (for hand shapes)
     shape_index_pairs = get_index_pairs("shape")
     for hand_index1, hand_index2 in shape_index_pairs:
-        feature_name = f"distance_r_hand{hand_index1}_r_hand{hand_index2}"
+        feature_name = f"distance_hand{hand_index1}_hand{hand_index2}"
         df_features[feature_name] = get_distance(
-            df_coords, f"r_hand{hand_index1}", f"r_hand{hand_index2}", norm_factor=norm_factor
+            df_coords, f"hand_x{hand_index1}", f"hand_x{hand_index2}", norm_factor=norm_factor
         )
 
-    # FINGER ANGLES
+    # FINGER ANGLES (for hand shapes)
     df_features["thumb_index_angle"] = get_angle(
-        df_coords["r_hand4"], df_coords["r_hand0"], df_coords["r_hand8"]
+        df_coords["hand_x4"], df_coords["hand_y4"], df_coords["hand_z4"],
+        df_coords["hand_x0"], df_coords["hand_y0"], df_coords["hand_z0"],
+        df_coords["hand_x8"], df_coords["hand_y8"], df_coords["hand_z8"]
     )
 
     # LIP FEATURES
-    df_features["lip_width"] = get_distance(df_coords, "face61", "face291", norm_factor=norm_factor)
-    df_features["lip_height"] = get_distance(df_coords, "face0", "face17", norm_factor=norm_factor)
+    # Geometric features
+    df_features["lip_width"] = get_distance(df_coords, "lip_x61", "lip_x291", norm_factor=norm_factor)
+    df_features["lip_height"] = get_distance(df_coords, "lip_x0", "lip_x17", norm_factor=norm_factor)
+    df_features["lip_area"] = df_features["lip_width"] * df_features["lip_height"]  # Approximate area
+
+    # Lip curvature (angle between upper and lower lip landmarks)
+    df_features["lip_curvature"] = get_angle(
+        df_coords["lip_x61"], df_coords["lip_y61"], df_coords["lip_z61"],  # Left corner
+        df_coords["lip_x0"], df_coords["lip_y0"], df_coords["lip_z0"],    # Upper lip center
+        df_coords["lip_x17"], df_coords["lip_y17"], df_coords["lip_z17"]  # Lower lip center
+    )
+
+    # Lip asymmetry (difference in height between left and right sides)
+    left_lip_height = get_distance(df_coords, "lip_x61", "lip_x0", norm_factor=norm_factor)
+    right_lip_height = get_distance(df_coords, "lip_x291", "lip_x0", norm_factor=norm_factor)
+    df_features["lip_asymmetry"] = abs(left_lip_height - right_lip_height)
+
+    # Motion features
+    df_features["lip_velocity_x"] = df_coords["lip_x0"].diff()  # Velocity of upper lip center
+    df_features["lip_velocity_y"] = df_coords["lip_y0"].diff()
+    df_features["lip_acceleration_x"] = df_features["lip_velocity_x"].diff()  # Acceleration of upper lip center
+    df_features["lip_acceleration_y"] = df_features["lip_velocity_y"].diff()
+
+    # Lip opening/closing speed
+    df_features["lip_opening_speed"] = df_features["lip_height"].diff()
 
     # RELATIVE MOTION
-    df_features["r_hand8_velocity_x"] = df_coords["r_hand8_x"].diff()
-    df_features["r_hand8_velocity_y"] = df_coords["r_hand8_y"].diff()
+    df_features["hand8_velocity_x"] = df_coords["hand_x8"].diff()
+    df_features["hand8_velocity_y"] = df_coords["hand_y8"].diff()
 
     return df_features
 
 
 def get_index_pairs(property_type):
+    """
+    Get index pairs for hand-face or hand-hand distances.
+
+    Args:
+        property_type (str): 'position' for hand-face distances, 'shape' for hand-hand distances.
+
+    Returns:
+        list: List of index pairs.
+    """
     index_pairs = []
     if property_type == 'shape':
+        # Hand-hand distances for hand shapes
         index_pairs.extend([
-            (2, 4), (5, 8), (9, 12), (13, 16), (17, 20),
-            (4, 5), (4, 8), (8, 12), (7, 11), (6, 10)
+            (2, 4), (5, 8), (9, 12), (13, 16), (17, 20),  # Finger tips to mcp
+            (0, 4), (0, 8), (0, 12), (0, 16), (0, 20),    # Wrist to finger tips
+            (4, 5), (4, 8), (8, 12), (7, 11), (6, 10), (12, 16), (16, 20)    # Adjacent finger tips
         ])
     elif property_type == 'position':
-        hand_indices = [8, 9, 12]  # index and middle fingers
-        face_indices = [130, 152, 94]  # right eye, chin, nose
+        # Hand-face distances for hand position
+        hand_indices = [8, 9, 12]  # Index and middle fingers
+        face_indices = [234, 454, 200, 214, 50]  # Specific face landmarks
         for hand_index in hand_indices:
             for face_index in face_indices:
                 index_pairs.append((hand_index, face_index))
@@ -319,31 +366,99 @@ def get_index_pairs(property_type):
 
 
 def get_feature_names(property_name):
+    """
+    Get feature names for hand-face or hand-hand distances.
+
+    Args:
+        property_name (str): 'position' for hand-face distances, 'shape' for hand-hand distances.
+
+    Returns:
+        list: List of feature names.
+    """
     feature_names = []
     if property_name == 'position':
         position_index_pairs = get_index_pairs('position')
         for hand_index, face_index in position_index_pairs:
-            feature_name = (f'distance_face{face_index}_r_hand{hand_index}')
+            feature_name = f'distance_face{face_index}_hand{hand_index}'
             feature_names.append(feature_name)
-            feature_name = (f'tan_angle_face{face_index}_r_hand{hand_index}')
+            feature_name = f'tan_angle_face{face_index}_hand{hand_index}'
             feature_names.append(feature_name)
     elif property_name == 'shape':
         shape_index_pairs = get_index_pairs('shape')
         for hand_index1, hand_index2 in shape_index_pairs:
-            feature_name = (
-                f'distance_r_hand{hand_index1}_r_hand{hand_index2}'
-            )
+            feature_name = f'distance_hand{hand_index1}_hand{hand_index2}'
             feature_names.append(feature_name)
     return feature_names
 
 
-def get_angle(p1, p2, p3):
-    # Calculate the angle between three points (p1, p2, p3)
-    v1 = p1 - p2
-    v2 = p3 - p2
-    cosine_angle = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
-    return np.arccos(cosine_angle)
+def get_distance(df_name, landmark1, landmark2, norm_factor=None):
+    """
+    Compute the Euclidean distance between two landmarks.
 
+    Args:
+        df_name (pd.DataFrame): DataFrame containing landmark coordinates.
+        landmark1 (str): Name of the first landmark (e.g., "hand_x8").
+        landmark2 (str): Name of the second landmark (e.g., "face_x234").
+        norm_factor (float, optional): Normalization factor. Defaults to None.
+
+    Returns:
+        pd.Series: Distance between the two landmarks.
+    """
+    x1 = df_name[f"{landmark1}"]
+    x2 = df_name[f"{landmark2}"]
+    y1 = df_name[f"{landmark1.replace('_x', '_y')}"]
+    y2 = df_name[f"{landmark2.replace('_x', '_y')}"]
+    z1 = df_name[f"{landmark1.replace('_x', '_z')}"]
+    z2 = df_name[f"{landmark2.replace('_x', '_z')}"]
+    d = np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2 + (z1 - z2) ** 2)
+
+    # Normalize
+    if norm_factor is not None:
+        d /= norm_factor
+
+    return d
+
+
+def get_delta_dim(df_name, landmark1, landmark2, dim, norm_factor=None):
+    """
+    Compute the difference in a specific dimension (x, y, or z) between two landmarks.
+
+    Args:
+        df_name (pd.DataFrame): DataFrame containing landmark coordinates.
+        landmark1 (str): Name of the first landmark (e.g., "hand_x8").
+        landmark2 (str): Name of the second landmark (e.g., "face_x234").
+        dim (str): Dimension to compute the difference for ("x", "y", or "z").
+        norm_factor (float, optional): Normalization factor. Defaults to None.
+
+    Returns:
+        pd.Series: Difference in the specified dimension.
+    """
+    delta = df_name[f"{landmark1.replace('_x', f'_{dim}')}"] - df_name[f"{landmark2.replace('_x', f'_{dim}')}"]
+    # Normalize
+    if norm_factor is not None:
+        delta /= norm_factor
+    return delta
+
+
+def get_angle(x1, y1, z1, x2, y2, z2, x3, y3, z3):
+    """
+    Compute the angle between three points.
+
+    Args:
+        x1, y1, z1: Coordinates of the first point.
+        x2, y2, z2: Coordinates of the second point (vertex).
+        x3, y3, z3: Coordinates of the third point.
+
+    Returns:
+        pd.Series: Angle in radians.
+    """
+    v1 = np.array([x1 - x2, y1 - y2, z1 - z2])
+    v2 = np.array([x3 - x2, y3 - y2, z3 - z2])
+    dot_product = np.sum(v1 * v2, axis=0)
+    norm_v1 = np.linalg.norm(v1, axis=0)
+    norm_v2 = np.linalg.norm(v2, axis=0)
+    angle = np.arccos(dot_product / (norm_v1 * norm_v2))
+    return angle
 
 def setup_logging(loglevel):
     """Setup basic logging

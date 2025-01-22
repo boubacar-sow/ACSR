@@ -37,6 +37,16 @@ def process_coordinates(path2coordinates, path2output):
     os.makedirs(path2output, exist_ok=True)
 
     for fn_coord in coordinate_files:
+        # Extract video name
+        video_name = fn_coord.replace('_coordinates.csv', '')
+        fn_features = f'{video_name}_features.csv'
+        fn_features_path = os.path.join(path2output, fn_features)
+
+        # Skip processing if the features file already exists
+        if os.path.exists(fn_features_path):
+            _logger.info(f'Features already extracted for: {fn_coord}. Skipping...')
+            continue
+
         # Load coordinates
         df_coord = pd.read_csv(os.path.join(path2coordinates, fn_coord))
         _logger.info(f'Loaded coordinates from: {fn_coord}')
@@ -45,10 +55,6 @@ def process_coordinates(path2coordinates, path2output):
         df_features = extract_features(df_coord)
 
         # Save features to CSV
-        # Extract video name
-        video_name = fn_coord.replace('_coordinates.csv', '')
-        fn_features = f'{video_name}_features.csv'
-        fn_features_path = os.path.join(path2output, fn_features)
         df_features.to_csv(fn_features_path, index=False)
         _logger.info(f'Features saved to: {fn_features_path}')
 

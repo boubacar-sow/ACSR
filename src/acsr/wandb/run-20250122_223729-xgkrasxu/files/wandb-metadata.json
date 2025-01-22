@@ -1,0 +1,77 @@
+{
+  "os": "Linux-5.14.0-362.18.1.el9_3.0.1.x86_64-x86_64-with-glibc2.34",
+  "python": "CPython 3.11.7",
+  "startedAt": "2025-01-22T21:37:30.877646Z",
+  "program": "/scratch2/bsow/Documents/ACSR/src/acsr/decoding.py",
+  "codePath": "src/acsr/decoding.py",
+  "git": {
+    "remote": "https://github.com/boubacar-sow/ACSR.git",
+    "commit": "6a506ac8105065820b7ba97076fdae3138efa894"
+  },
+  "email": "boubasow.pro@gmail.com",
+  "root": "/scratch2/bsow/Documents/ACSR/src/acsr",
+  "host": "puck6",
+  "executable": "/home/bsow/.cache/pypoetry/virtualenvs/acsr-jnt0UJEK-py3.11/bin/python",
+  "codePathLocal": "decoding.py",
+  "cpu_count": 56,
+  "cpu_count_logical": 112,
+  "gpu": "NVIDIA A40",
+  "gpu_count": 1,
+  "disk": {
+    "/": {
+      "total": "75094818816",
+      "used": "4931977216"
+    }
+  },
+  "memory": {
+    "total": "810776371200"
+  },
+  "cpu": {
+    "count": 56,
+    "countLogical": 112
+  },
+  "gpu_nvidia": [
+    {
+      "name": "NVIDIA A40",
+      "memoryTotal": "48305799168",
+      "cudaCores": 10752,
+      "architecture": "Ampere"
+    }
+  ],
+  "slurm": {
+    "cluster_name": "oberon-hpc",
+    "conf": "/etc/slurm/slurm.conf",
+    "cpus_on_node": "6",
+    "cpus_per_task": "6",
+    "gpus_on_node": "1",
+    "gtids": "0",
+    "job_cpus_per_node": "6",
+    "job_gid": "1001",
+    "job_gpus": "2",
+    "job_id": "19428",
+    "job_name": "cuedspeech",
+    "job_nodelist": "puck6",
+    "job_num_nodes": "1",
+    "job_partition": "gpu",
+    "job_qos": "normal",
+    "job_uid": "2077",
+    "job_user": "bsow",
+    "jobid": "19428",
+    "localid": "0",
+    "mem_per_node": "10240",
+    "nnodes": "1",
+    "node_aliases": "(null)",
+    "nodeid": "0",
+    "nodelist": "puck6",
+    "prio_process": "0",
+    "procid": "0",
+    "submit_dir": "/scratch2/bsow/Documents/ACSR/src/acsr",
+    "submit_host": "oberon2",
+    "task_pid": "2868361",
+    "tasks_per_node": "1",
+    "topology_addr": "puck6",
+    "topology_addr_pattern": "node",
+    "working_cluster": "oberon-hpc:10.20.0.102:6817:9728:109"
+  },
+  "cudaVersion": "12.4"
+}

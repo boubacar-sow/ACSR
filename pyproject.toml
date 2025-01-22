@@ -45,6 +45,7 @@ scikit-learn = "^1.6.1"
 praatio = "^6.2.0"
 scikit-image = "^0.25.0"
 noisereduce = "^3.0.3"
+wandb = "^0.19.4"
 
 
 [tool.poetry.group.dev.dependencies]
