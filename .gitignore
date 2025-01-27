@@ -66,3 +66,4 @@ src/acsr/wandb/*
 
 # saved models
 src/acsr/saved_models/*
+saved_models/*

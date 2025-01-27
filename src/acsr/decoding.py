@@ -257,10 +257,7 @@ class ThreeStreamFusionModel(nn.Module):
         
         # Fully connected layer
         self.fc = nn.Sequential(
-            nn.Linear(hidden_dim_fusion_gru*2, 512),  # Bi-GRU output is hidden_dim * 4 (bidirectional)
-            nn.ReLU(),
-            #nn.Dropout(0.1),
-            nn.Linear(512, output_dim),
+            nn.Linear(hidden_dim_fusion_gru*2, output_dim),
         )
 
     def forward(self, hand_shape, hand_pos, lips):
@@ -406,7 +403,7 @@ def train_student_model(student_model, teacher_model, train_loader, val_loader, 
         blank_token = phoneme_to_index[" "]
         decoded_val_sequences, true_val_sequences = decode_loader(student_model, val_loader, blank_token, index_to_phoneme)
         val_per = calculate_per_with_jiwer(decoded_val_sequences, true_val_sequences)
-        print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {round(epoch_loss / len(train_loader), 3)}, Validation Loss: {round(val_loss, 3)}, Accuracy (1 - PER): {round(1 - val_per, 3)}")
+        print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {round(epoch_loss / len(train_loader), 3)}, Validation Loss: {round(val_loss, 3)}, Accuracy (1 - PER): {round(1 - val_per, 3)}, Time: {round(time.time() - epoch_start_time, 2)} seconds")
         sys.stdout.flush()
         
         # Log validation PER to W&B
@@ -415,7 +412,6 @@ def train_student_model(student_model, teacher_model, train_loader, val_loader, 
 
         epoch_end_time = time.time()
         epoch_duration = epoch_end_time - epoch_start_time
-        print(f"Time taken for epoch {epoch + 1}: {epoch_duration:.2f} seconds")
     
     print("Training complete.")
 
@@ -649,6 +645,7 @@ if __name__ == "__main__":
         print("Batch X_student_lips shape:", batch_X_student_lips.shape)
         #print("Batch X_teacher shape:", batch_X_teacher.shape)
         print("Batch y shape:", batch_y.shape)
+        print("Output dim of the model: ", len(phoneme_to_index))
         break
     wandb.login(key="580ab03d7111ed25410f9831b06b544b5f5178a2")
     # Initialize W&B
@@ -656,8 +653,8 @@ if __name__ == "__main__":
         "learning_rate": 1e-3,
         "batch_size": 16,
         "epochs": 500,
-        "hidden_dim_fusion": 512,
-        "hidden_dim_features": 200,
+        "hidden_dim_fusion": 256,
+        "hidden_dim_features": 128,
         "output_dim": len(phoneme_to_index),
         "device": "cuda" if torch.cuda.is_available() else "cpu",
         "level": "syllables"
@@ -669,8 +666,8 @@ if __name__ == "__main__":
         hand_pos_dim=30,    # 3 coordinates (x, y, z)
         lips_dim=10,       # 40 keypoints × 3 coordinates
         output_dim=len(phoneme_to_index),  # Number of phonemes
-        hidden_dim_features_gru=200,  # Hidden dimension for GRUs
-        hidden_dim_fusion_gru=512,     # Hidden dimension for GRUs
+        hidden_dim_features_gru=128,  # Hidden dimension for GRUs
+        hidden_dim_fusion_gru=256,     # Hidden dimension for GRUs
     )
 
     # Optimizer
@@ -710,41 +707,41 @@ if __name__ == "__main__":
     model_artifact.add_file("/scratch2/bsow/Documents/ACSR/output/saved_models/student_model.pth")
     wandb.log_artifact(model_artifact)
     
-    # load the next syllable model
-    from syllabification.py import *
-
-    # Initialize model
-    nextsyllable_model = NextSyllableLSTM(
-        vocab_size=len(phoneme_to_index),
-        embedding_dim=256,
-        hidden_dim=512,
-        num_layers=2
-    )
-
-    # Load model weights
-    nextsyllable_model.load_state_dict(torch.load("/scratch2/bsow/Documents/ACSR/output/saved_models/next_syllable_lstm.pth"))
-    # Ensure both models are on the same device
-    nextsyllable_model.to(device)
-    
-    # After training your models, perform decoding
-    blank_token = phoneme_to_index[" "]
-    beam_width = 5
-    alpha = 0.7  # Adjust alpha to balance between models
-    
-    decoded_train_sequences, true_train_sequences = decode_loader_combined(
-        student_model, nextsyllable_model, train_loader,
-        blank_token, index_to_phoneme, dataset, beam_width, alpha, device
-    )
-    decoded_val_sequences, true_val_sequences = decode_loader_combined(
-        student_model, nextsyllable_model, val_loader,
-        blank_token, index_to_phoneme, dataset, beam_width, alpha, device
-    )
-    
-    # Evaluate performance
-    train_per_beam = calculate_per_with_jiwer(decoded_train_sequences, true_train_sequences)
-    val_per_beam = calculate_per_with_jiwer(decoded_val_sequences, true_val_sequences)
-    print("Training PER (jiwer) after combining models:", train_per_beam)
-    print("Validation PER (jiwer) after combining models:", val_per_beam)
+    ## load the next syllable model
+    #from syllabification.py import *
+#
+    ## Initialize model
+    #nextsyllable_model = NextSyllableLSTM(
+    #    vocab_size=len(phoneme_to_index),
+    #    embedding_dim=256,
+    #    hidden_dim=512,
+    #    num_layers=2
+    #)
+#
+    ## Load model weights
+    #nextsyllable_model.load_state_dict(torch.load("/scratch2/bsow/Documents/ACSR/output/saved_models/next_syllable_lstm.pth"))
+    ## Ensure both models are on the same device
+    #nextsyllable_model.to(device)
+    #
+    ## After training your models, perform decoding
+    #blank_token = phoneme_to_index[" "]
+    #beam_width = 5
+    #alpha = 0.7  # Adjust alpha to balance between models
+    #
+    #decoded_train_sequences, true_train_sequences = decode_loader_combined(
+    #    student_model, nextsyllable_model, train_loader,
+    #    blank_token, index_to_phoneme, dataset, beam_width, alpha, device
+    #)
+    #decoded_val_sequences, true_val_sequences = decode_loader_combined(
+    #    student_model, nextsyllable_model, val_loader,
+    #    blank_token, index_to_phoneme, dataset, beam_width, alpha, device
+    #)
+    #
+    ## Evaluate performance
+    #train_per_beam = calculate_per_with_jiwer(decoded_train_sequences, true_train_sequences)
+    #val_per_beam = calculate_per_with_jiwer(decoded_val_sequences, true_val_sequences)
+    #print("Training PER (jiwer) after combining models:", train_per_beam)
+    #print("Validation PER (jiwer) after combining models:", val_per_beam)
 
 
     # Finish W&B run
