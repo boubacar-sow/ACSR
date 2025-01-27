@@ -30,8 +30,8 @@ vowel_positions = {
     "ə": -1, #(-0.15, 0.1, 0.0),   # Same as /a/
 
     # Position 2: /ɛ̃/, /ø/
-    "ɛ̃": 118,   # Right cheek
-    "ø": 118,   # Same as /ɛ̃/
+    "ɛ̃": 50,   # Right cheek
+    "ø": 50,   # Same as /ɛ̃/
 
     # Position 3: /i/, /ɔ̃/, /ɑ̃/
     "i": 57,   # Right corner of the mouth, mediapipe 118
@@ -102,7 +102,12 @@ def transcribe_audio(audio_path, device="cuda"):
         text = segment["text"]
         segments.append((segment["start"], segment["end"], text))
     
-    return segments
+    # concatenate the segments
+    all_segments = {"start": segments[0][0], "end": segments[-1][1], "text": segments[0][2]}
+    for i, segment in enumerate(segments):
+        if i > 0:
+            all_segments["text"] += " " + segment[2]
+    return [list(all_segments.values())]
 
 # Step 3: Align audio to text using MFA (command-line)
 def align_audio_to_text(audio_path, text, output_dir):
@@ -241,14 +246,14 @@ def map_syllable_to_cue(syllable):
             if vowel[0] == "ɔ":
                 hand_position = vowel_positions.get("ɔ̃", 57)  # Default to Position 3
             elif vowel[0] == "ɛ":
-                hand_position = vowel_positions.get("ɛ̃", 118)  # Default to Position 2
+                hand_position = vowel_positions.get("ɛ̃", 50)  # Default to Position 2
             elif vowel[0] == "ɑ":
                 hand_position = vowel_positions.get("ɑ̃", 57)
             return hand_shape, hand_position
         
         if consonant in consonants and vowel in vowels:
             hand_shape = consonant_to_handshape.get(consonant, 1)  # Default to Hand Shape 1
-            hand_position = vowel_positions.get(vowel, (0.15, 0.1, 0.0))  # Default to Position 1
+            hand_position = vowel_positions.get(vowel, 1)  # Default to Position 1
             return hand_shape, hand_position
 
     elif len(syllable) == 1:  # Single letter (C or V)
@@ -258,7 +263,7 @@ def map_syllable_to_cue(syllable):
             return hand_shape, hand_position
         elif syllable in vowels:  # Single vowel
             hand_shape = 5  # Default to Hand Shape 5
-            hand_position = vowel_positions.get(syllable, (0.15, 0.1, 0.0))  # Default to Position 1
+            hand_position = vowel_positions.get(syllable, 1)  # Default to Position 1
             return hand_shape, hand_position
 
     # Default fallback
@@ -309,7 +314,7 @@ def calculate_face_scale(face_landmarks, reference_face_bbox):
     return scale_factor
 
 
-def adjust_hand_to_vowel(hand_landmarks, face_landmarks, vowel_position, face_bbox, scale_factor=1.0):
+def adjust_hand_to_vowel(handshape_index, hand_landmarks, face_landmarks, vowel_position, face_bbox, scale_factor=1.0):
     """
     Adjust the hand landmarks to the specified vowel position.
     Args:
@@ -332,7 +337,7 @@ def adjust_hand_to_vowel(hand_landmarks, face_landmarks, vowel_position, face_bb
         target_z = face_landmarks.landmark[vowel_position].z
 
     # Choose the reference finger
-    reference_landmark_idx = choose_reference_finger(hand_landmarks)
+    reference_landmark_idx = choose_reference_finger(handshape_index)
     reference_landmark = hand_landmarks[reference_landmark_idx]
 
     # Calculate the offset to move the reference landmark to the target position
@@ -380,7 +385,7 @@ def render_hand(frame, hand_landmarks, scale_factor=1.0):
         end_x, end_y = int(scaled_landmarks[end_idx][0] * frame.shape[1]), int(scaled_landmarks[end_idx][1] * frame.shape[0])
         cv2.line(frame, (start_x, start_y), (end_x, end_y), (255, 0, 0), 2)  # Blue lines for connections
 
-def choose_reference_finger(hand_landmarks):
+def choose_reference_finger(consonant_index):
     """
     Choose the reference finger (the one with the maximum distance between the base of the palm and the tip).
     Args:
@@ -388,20 +393,11 @@ def choose_reference_finger(hand_landmarks):
     Returns:
         int: Index of the reference landmark.
     """
-    palm_base = hand_landmarks[0]  # Landmark 0 is the base of the palm
-    fingertip_indices = [4, 8, 12, 16, 20]  # Indices of the fingertips
-
-    max_distance = 0
-    reference_landmark_idx = 8  # Default to index finger tip
-
-    for idx in fingertip_indices:
-        fingertip = hand_landmarks[idx]
-        distance = ((fingertip[0] - palm_base[0]) ** 2 + (fingertip[1] - palm_base[1]) ** 2 + (fingertip[2] - palm_base[2]) ** 2) ** 0.5
-        if distance > max_distance:
-            max_distance = distance
-            reference_landmark_idx = idx
-
-    return reference_landmark_idx
+    
+    if consonant_index == 1 or consonant_index == 6:
+        return 8
+    else:
+        return 12
 
 from moviepy.editor import VideoFileClip, AudioFileClip
 
@@ -423,20 +419,21 @@ def add_audio_to_video(video_path, audio_path, output_path):
     final_clip = video_clip.set_audio(audio_clip)
 
     # Save the final video with audio
-    final_clip.write_videofile(output_path, codec="libx264", audio_codec="aac")
+    final_clip.write_videofile(output_path, codec="libx265", audio_codec="aac")
 
     # Close the clips
     video_clip.close()
     audio_clip.close()
 
+
 # Main function (updated rendering logic)
 def main():
     # File paths
-    video_path = "/scratch2/bsow/Documents/ACSR/data/videos/example_video2.mp4"
-    audio_path = "/scratch2/bsow/Documents/ACSR/data/transcriptions/output_audio.wav"
+    video_path = "/scratch2/bsow/Documents/ACSR/data/videos/cuedspeech2.mp4"
+    audio_path = "/scratch2/bsow/Documents/ACSR/data/transcriptions/cuedspeech2.wav"
     output_dir = "/scratch2/bsow/Documents/ACSR/data/transcriptions"
-    rendered_video_path = "/scratch2/bsow/Documents/ACSR/data/videos/cued_speech_video.mp4"
-    final_video_path = "/scratch2/bsow/Documents/ACSR/data/videos/cued_speech_video_with_audio2.mp4"
+    rendered_video_path = "/scratch2/bsow/Documents/ACSR/data/videos/cuedspeech2_lpc.mp4"
+    final_video_path = "/scratch2/bsow/Documents/ACSR/data/videos/cuedspeech2_with_audio.mp4"
 
     # Step 1: Extract audio from the video
     video_duration = extract_audio(video_path, audio_path)
@@ -446,17 +443,25 @@ def main():
     print("Transcription segments:")
     print(segments)
 
+    all_syllables = {}
+
     # Step 3: Align audio to text using MFA
+    max = 0
     for segment in segments:
         start_time, end_time, text = segment
-        alignment_output = r'/scratch2/bsow/Documents/ACSR/data/transcriptions/output_audio.TextGrid'
+        alignment_output = align_audio_to_text(audio_path, text, output_dir)
         print(f"Alignment saved to: {alignment_output}")
 
         # Step 4: Construct syllables from the TextGrid file
         syllables = construct_syllables(alignment_output)
         print("Syllables and their intervals:")
-        for syllable, interval in syllables.items():
+        for i, (syllable, interval) in enumerate(syllables.items()):
+            #if i == 0:
+            #    syllable[0]= max
             print(f"{syllable.split('_')[0]}: {interval}")
+            all_syllables[syllable] = interval
+            max = interval[1]
+        
 
     # Step 5: Render the video with hand cues
     cap = cv2.VideoCapture(video_path)
@@ -465,7 +470,7 @@ def main():
     frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
     # Define the output video
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # Use H.264 codec here
     out = cv2.VideoWriter(rendered_video_path, fourcc, fps, (frame_width, frame_height))
 
     frame_count = 0
@@ -487,11 +492,10 @@ def main():
                     face_landmarks.landmark[1].z,
                 ]
 
-
                 # Find the current syllable based on the frame count
                 current_time = frame_count / fps
                 current_syllable = None
-                for syllable, (start, end) in syllables.items():
+                for syllable, (start, end) in all_syllables.items():
                     if start <= current_time <= end:
                         current_syllable = syllable.split('_')[0]
                         break
@@ -509,7 +513,7 @@ def main():
                     scale_factor = calculate_face_scale(face_landmarks, reference_face_bbox)
                     
                     # Step 3: Adjust the hand to the vowel position
-                    adjusted_landmarks = adjust_hand_to_vowel(hand_landmarks, face_landmarks, hand_position, scale_factor)
+                    adjusted_landmarks = adjust_hand_to_vowel(hand_shape, hand_landmarks, face_landmarks, hand_position, scale_factor)
 
                     # Render the hand on the frame with scaling
                     render_hand(frame, adjusted_landmarks, scale_factor)
@@ -526,6 +530,7 @@ def main():
     # Step 6: Add the original audio to the rendered video
     add_audio_to_video(rendered_video_path, audio_path, final_video_path)
     print(f"Final video with audio saved to: {final_video_path}")
+
 
 if __name__ == "__main__":
     main()

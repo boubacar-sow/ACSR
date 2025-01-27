@@ -37,7 +37,8 @@ def find_phoneme_files(directory, base_names):
     return phoneme_files
 
 # Load phoneme-to-index mapping
-with open(r"/scratch2/bsow/Documents/ACSR/data/training_videos/CSF22_train/phonelist.csv", "r") as file:
+# with open(r"/scratch2/bsow/Documents/ACSR/data/training_videos/CSF22_train/phonelist.csv", "r") as file:
+with open(r"/scratch2/bsow/Documents/ACSR/data/training_videos/syllables.txt", "r") as file:
     reader = csv.reader(file)
     vocabulary_list = [row[0] for row in reader]
 
@@ -50,6 +51,37 @@ def load_features(directory, base_name):
     df = pd.read_csv(file_path)
     df.dropna(inplace=True)  # Drop rows with NaN values
     return df
+
+def syllabify_ipa(ipa_text):
+    consonants = {"b", "d", "f", "g", "h", "j", "k", "l", "m", "n", "n~", "p", "r", "s", "s^", "t", "v", "w", "z", "z^", "ng", "gn"}
+    vowels = {"a", "a~", "e", "e^", "e~", "i", "o", "o^", "o~", "u", "y", "x", "x^", "x~"}
+    phonemes = ipa_text.split()
+    syllables = []
+    i = 0
+
+    while i < len(phonemes):
+        phone = phonemes[i]
+        if phone in vowels:
+            syllables.append(phone)
+            i += 1
+        elif phone in consonants:
+            # Check if there is a next phone
+            if i + 1 < len(phonemes):
+                next_phone = phonemes[i + 1]
+                if next_phone in vowels:
+                    syllable = phone + next_phone
+                    syllables.append(syllable)
+                    i += 2 
+                else:
+                    syllables.append(phone)
+                    i += 1
+            else:
+                syllables.append(phone)
+                i += 1
+        else:
+            i += 1
+    return syllables
+
 
 def prepare_data_for_videos_no_sliding_windows(base_names, phoneme_files, features_dir, labels_dir, phoneme_to_index):
     all_videos_data = {}
@@ -78,19 +110,22 @@ def prepare_data_for_videos_no_sliding_windows(base_names, phoneme_files, featur
             # Read the CSV file
             phoneme_labels = pd.read_csv(labels_path, header=None).squeeze().tolist()  # Convert to list of phonemes
 
-            # Convert phoneme labels to indices
-            phoneme_indices = []
-            for phoneme in phoneme_labels:
-                if phoneme not in phoneme_to_index:
-                    raise ValueError(f"Phoneme '{phoneme}' not found in the vocabulary. File: {base_name}")
-                phoneme_indices.append(phoneme_to_index[phoneme])
+            # Convert phoneme labels to syllables
+            syllable_labels = syllabify_ipa(" ".join(phoneme_labels))
 
-            # Combine features and phoneme indices
+            # Convert syllable labels to indices
+            syllable_indices = []
+            for syllable in syllable_labels:
+                if syllable not in phoneme_to_index:
+                    raise ValueError(f"Syllable '{syllable}' not found in the vocabulary. File: {base_name}")
+                syllable_indices.append(phoneme_to_index[syllable])
+
+            # Combine features and syllable indices
             all_videos_data[base_name] = {
                 "X_student_hand_shape": X_student_hand_shape,  # Hand shape features
                 "X_student_hand_pos": X_student_hand_pos,      # Hand position features
                 "X_student_lips": X_student_lips,              # Lip features
-                "y": phoneme_indices,                          # Phoneme labels (sequence)
+                "y": syllable_indices,                         # Syllable labels (sequence)
             }
     return all_videos_data
 
@@ -222,10 +257,10 @@ class ThreeStreamFusionModel(nn.Module):
         
         # Fully connected layer
         self.fc = nn.Sequential(
-            nn.Linear(hidden_dim_fusion_gru*2, 200),  # Bi-GRU output is hidden_dim * 4 (bidirectional)
+            nn.Linear(hidden_dim_fusion_gru*2, 512),  # Bi-GRU output is hidden_dim * 4 (bidirectional)
             nn.ReLU(),
             #nn.Dropout(0.1),
-            nn.Linear(200, output_dim),
+            nn.Linear(512, output_dim),
         )
 
     def forward(self, hand_shape, hand_pos, lips):
@@ -312,9 +347,13 @@ def validate_student_model(student_model, val_loader, device):
     avg_val_loss = val_loss / len(val_loader)
     return avg_val_loss
 
+import time
+
 def train_student_model(student_model, teacher_model, train_loader, val_loader, num_epochs=50, device="cuda"):
     # Set teacher model to evaluation mode
     for epoch in range(num_epochs):
+        epoch_start_time = time.time()
+        
         student_model.train()
         #teacher_model.eval()
         epoch_loss = 0.0
@@ -356,14 +395,9 @@ def train_student_model(student_model, teacher_model, train_loader, val_loader, 
         
         # Log training loss to W&B
         wandb.log({"train_loss": epoch_loss / len(train_loader), "epoch": epoch + 1})
-        
-        print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {epoch_loss / len(train_loader)}")
-        sys.stdout.flush()
-        
+
         # Evaluate the model on the validation set
         val_loss = validate_student_model(student_model, val_loader, device)
-        print(f"Validation Loss after Epoch [{epoch+1}/{num_epochs}]: {val_loss}")
-        sys.stdout.flush()
         
         # Log validation loss to W&B
         wandb.log({"val_loss": val_loss, "epoch": epoch + 1})
@@ -372,14 +406,19 @@ def train_student_model(student_model, teacher_model, train_loader, val_loader, 
         blank_token = phoneme_to_index[" "]
         decoded_val_sequences, true_val_sequences = decode_loader(student_model, val_loader, blank_token, index_to_phoneme)
         val_per = calculate_per_with_jiwer(decoded_val_sequences, true_val_sequences)
-        print("Validation PER (jiwer):", val_per, "1 - PER: ", 1 - val_per)
+        print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {round(epoch_loss / len(train_loader), 3)}, Validation Loss: {round(val_loss, 3)}, Accuracy (1 - PER): {round(1 - val_per, 3)}")
         sys.stdout.flush()
         
         # Log validation PER to W&B
         wandb.log({"val_per": 1-val_per, "epoch": epoch + 1})
         wandb.log({"val_wer": val_per, "epoch": epoch + 1})
+
+        epoch_end_time = time.time()
+        epoch_duration = epoch_end_time - epoch_start_time
+        print(f"Time taken for epoch {epoch + 1}: {epoch_duration:.2f} seconds")
     
     print("Training complete.")
+
 
 def greedy_decoder(output, blank):
     arg_maxes = torch.argmax(output, dim=2)  # Get the most likely class for each time step
@@ -427,10 +466,144 @@ def calculate_per_with_jiwer(decoded_sequences, true_sequences):
     # Convert phoneme sequences to space-separated strings
     decoded_str = [" ".join(seq) for seq in decoded_sequences]
     true_str = [" ".join(seq) for seq in true_sequences]
-
     # Calculate PER using jiwer
-    per = jiwer.wer(true_str, decoded_str)
+    try:
+        per = jiwer.wer(true_str, decoded_str)
+    except Exception as e:
+        print("Error calculating PER:", e)
+        print("True sequences:", true_str)
+        print("Decoded sequences:", decoded_str)
     return per
+
+import torch
+import torch.nn.functional as F
+from collections import defaultdict
+import heapq
+
+def compute_log_probs(logits):
+    """
+    Converts logits to log probabilities.
+    Args:
+        logits (torch.Tensor): Output logits from the model.
+    Returns:
+        torch.Tensor: Log probabilities.
+    """
+    return F.log_softmax(logits, dim=-1)
+
+def combine_log_probs(log_probs_am, log_probs_lm, alpha=0.7):
+    """
+    Combines acoustic and language model log probabilities using a weighted sum.
+    Args:
+        log_probs_am (torch.Tensor): Log probabilities from the acoustic model.
+        log_probs_lm (torch.Tensor): Log probabilities from the language model.
+        alpha (float): Weight for the acoustic model probabilities.
+    Returns:
+        torch.Tensor: Combined log probabilities.
+    """
+    combined_log_probs = alpha * log_probs_am + (1 - alpha) * log_probs_lm
+    return combined_log_probs
+
+def beam_search_decode(cuedspeech_model, nextsyllable_model, inputs_am, 
+                       blank, index_to_syllable, beam_width=5, alpha=0.7, device='cuda'):
+    """
+    Performs beam search decoding using both the cuedspeech and next syllable models.
+    Args:
+        cuedspeech_model: The trained cuedspeech (acoustic) model.
+        nextsyllable_model: The trained next syllable (language) model.
+        inputs_am (tuple): Tuple of inputs for the cuedspeech model.
+        blank (int): Index of the blank symbol.
+        index_to_syllable (dict): Mapping from indices to syllables.
+        beam_width (int): The beam width for beam search.
+        alpha (float): Weight for the acoustic model log probabilities.
+        device (str): Device to run the models on.
+    Returns:
+        list: Decoded syllable sequence.
+    """
+    cuedspeech_model.eval()
+    nextsyllable_model.eval()
+    with torch.no_grad():
+        # Move inputs to device
+        inputs_am = [inp.to(device) for inp in inputs_am]
+        
+        # Get acoustic model outputs
+        logits_am = cuedspeech_model(*inputs_am)  # Shape: [batch_size, seq_len, vocab_size]
+        log_probs_am = compute_log_probs(logits_am)  # Log probabilities from acoustic model
+        
+        batch_size, seq_len, vocab_size = log_probs_am.size()
+        
+        # Initialize beams
+        beams = [([], 0.0)]  # Each beam is a tuple (sequence, score)
+        
+        for t in range(seq_len):
+            new_beams = []
+            log_probs_am_t = log_probs_am[:, t, :]  # Shape: [batch_size, vocab_size]
+            
+            for seq, score in beams:
+                # Prepare input for language model
+                if seq:
+                    lm_input = torch.tensor([phoneme_to_index[seq[-1]]], device=device).unsqueeze(0)
+                else:
+                    lm_input = torch.tensor([[blank]], device=device)
+                
+                # Get language model log probabilities
+                logits_lm = nextsyllable_model(lm_input)  # Shape: [batch_size, vocab_size]
+                log_probs_lm = compute_log_probs(logits_lm)
+                log_probs_lm = log_probs_lm.squeeze(0)  # Shape: [vocab_size]
+                
+                # Combine log probabilities
+                combined_log_probs = combine_log_probs(log_probs_am_t.squeeze(0), log_probs_lm, alpha=alpha)
+                
+                # Get top K candidates
+                topk_log_probs, topk_indices = torch.topk(combined_log_probs, beam_width)
+                
+                for i in range(beam_width):
+                    idx = topk_indices[i].item()
+                    log_prob = topk_log_probs[i].item()
+                    new_seq = seq.copy()
+                    if idx != blank:
+                        new_seq.append(index_to_syllable[idx])
+                    new_score = score + log_prob
+                    new_beams.append((new_seq, new_score))
+            
+            # Keep top K beams
+            beams = sorted(new_beams, key=lambda x: x[1], reverse=True)[:beam_width]
+        
+        # Return the best sequence
+        best_seq, _ = beams[0]
+        return best_seq
+
+def decode_loader_combined(cuedspeech_model, nextsyllable_model, loader, 
+                           blank, index_to_syllable, beam_width=5, alpha=0.7, device='cuda'):
+    cuedspeech_model.eval()
+    nextsyllable_model.eval()
+    all_decoded_sequences = []
+    all_true_sequences = []
+    
+    with torch.no_grad():
+        for batch_X_hand_shape, batch_X_hand_pos, batch_X_lips, batch_y in loader:
+            batch_size = batch_X_hand_shape.size(0)
+            # Move data to device
+            batch_X_hand_shape = batch_X_hand_shape.to(device)
+            batch_X_hand_pos = batch_X_hand_pos.to(device)
+            batch_X_lips = batch_X_lips.to(device)
+            batch_y = batch_y.to(device)
+            
+            for i in range(batch_size):
+                inputs_am = (batch_X_hand_shape[i].unsqueeze(0),
+                             batch_X_hand_pos[i].unsqueeze(0),
+                             batch_X_lips[i].unsqueeze(0))
+                decoded_seq = beam_search_decode(
+                    cuedspeech_model, nextsyllable_model, inputs_am, 
+                    blank, index_to_syllable, beam_width, alpha, device
+                )
+                all_decoded_sequences.append(decoded_seq)
+                
+                # Process ground truth sequence
+                true_seq_indices = batch_y[i]
+                true_seq = [index_to_syllable[idx.item()] for idx in true_seq_indices if idx != blank]
+                all_true_sequences.append(true_seq)
+    
+    return all_decoded_sequences, all_true_sequences
 
 
 if __name__ == "__main__":
@@ -463,8 +636,8 @@ if __name__ == "__main__":
     train_data, val_data = train_val_split(data)
 
     # Prepare DataLoaders
-    train_loader = data_to_dataloader(train_data, batch_size=8, shuffle=True)
-    val_loader = data_to_dataloader(val_data, batch_size=8, shuffle=False)
+    train_loader = data_to_dataloader(train_data, batch_size=16, shuffle=True)
+    val_loader = data_to_dataloader(val_data, batch_size=16, shuffle=False)
 
     print("Len of train dataset", len(train_data['X_student_hand_shape']))
     print("Len of val dataset", len(val_data['X_student_hand_shape']))
@@ -481,12 +654,13 @@ if __name__ == "__main__":
     # Initialize W&B
     wandb.init(project="acsr", config={
         "learning_rate": 1e-3,
-        "batch_size": 8,
+        "batch_size": 16,
         "epochs": 500,
-        "hidden_dim_fusion": 256,
-        "hidden_dim_features": 128,
+        "hidden_dim_fusion": 512,
+        "hidden_dim_features": 200,
         "output_dim": len(phoneme_to_index),
-        "device": "cuda" if torch.cuda.is_available() else "cpu"
+        "device": "cuda" if torch.cuda.is_available() else "cpu",
+        "level": "syllables"
     })
 
     # Define the model
@@ -495,8 +669,8 @@ if __name__ == "__main__":
         hand_pos_dim=30,    # 3 coordinates (x, y, z)
         lips_dim=10,       # 40 keypoints × 3 coordinates
         output_dim=len(phoneme_to_index),  # Number of phonemes
-        hidden_dim_features_gru=128,  # Hidden dimension for GRUs
-        hidden_dim_fusion_gru=256,     # Hidden dimension for GRUs
+        hidden_dim_features_gru=200,  # Hidden dimension for GRUs
+        hidden_dim_fusion_gru=512,     # Hidden dimension for GRUs
     )
 
     # Optimizer
@@ -527,9 +701,6 @@ if __name__ == "__main__":
     print("Validation PER (jiwer):", val_per, "1 - PER: ", 1 - val_per)
     sys.stdout.flush()
     
-    # Log final PER to W&B
-    #wandb.log({"train_per": train_per, "val_per": val_per})
-    
     # Save the trained student model
     torch.save(student_model.state_dict(), "/scratch2/bsow/Documents/ACSR/output/saved_models/student_model.pth")
     print("Student model saved.")
@@ -539,5 +710,42 @@ if __name__ == "__main__":
     model_artifact.add_file("/scratch2/bsow/Documents/ACSR/output/saved_models/student_model.pth")
     wandb.log_artifact(model_artifact)
     
+    # load the next syllable model
+    from syllabification.py import *
+
+    # Initialize model
+    nextsyllable_model = NextSyllableLSTM(
+        vocab_size=len(phoneme_to_index),
+        embedding_dim=256,
+        hidden_dim=512,
+        num_layers=2
+    )
+
+    # Load model weights
+    nextsyllable_model.load_state_dict(torch.load("/scratch2/bsow/Documents/ACSR/output/saved_models/next_syllable_lstm.pth"))
+    # Ensure both models are on the same device
+    nextsyllable_model.to(device)
+    
+    # After training your models, perform decoding
+    blank_token = phoneme_to_index[" "]
+    beam_width = 5
+    alpha = 0.7  # Adjust alpha to balance between models
+    
+    decoded_train_sequences, true_train_sequences = decode_loader_combined(
+        student_model, nextsyllable_model, train_loader,
+        blank_token, index_to_phoneme, dataset, beam_width, alpha, device
+    )
+    decoded_val_sequences, true_val_sequences = decode_loader_combined(
+        student_model, nextsyllable_model, val_loader,
+        blank_token, index_to_phoneme, dataset, beam_width, alpha, device
+    )
+    
+    # Evaluate performance
+    train_per_beam = calculate_per_with_jiwer(decoded_train_sequences, true_train_sequences)
+    val_per_beam = calculate_per_with_jiwer(decoded_val_sequences, true_val_sequences)
+    print("Training PER (jiwer) after combining models:", train_per_beam)
+    print("Validation PER (jiwer) after combining models:", val_per_beam)
+
+
     # Finish W&B run
     wandb.finish()
