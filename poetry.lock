@@ -1013,6 +1013,83 @@ pycodestyle = ">=2.12.0,<2.13.0"
 pyflakes = ">=3.2.0,<3.3.0"
 
 [[package]]
+name = "flashlight-text"
+version = "0.0.7"
+description = "Flashlight Text bindings for Python"
+optional = false
+python-versions = ">=3.6"
+groups = ["main"]
+files = [
+    {file = "flashlight-text-0.0.7.tar.gz", hash = "sha256:fb63779b4b642c0c59e66386f43db8357836ed1be82b49d30155f7c39136d836"},
+    {file = "flashlight_text-0.0.7-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:9057743c23b9e88af1544e243c54d699f6c3f0dc34a060ad6564a9c3032c64d6"},
+    {file = "flashlight_text-0.0.7-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:d77dd69aad591fa71af97d12936a1ea53787a040be299f7b11f6152bcc4d6412"},
+    {file = "flashlight_text-0.0.7-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:f8af936d53626d9ea45922efae62cb1775aaa1b65a483d79d3a3a1cc37e2df1e"},
+    {file = "flashlight_text-0.0.7-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:0334181f2da9fba19804f41ea20e0a4b987806a8e0094cdae671c901663eae38"},
+    {file = "flashlight_text-0.0.7-cp310-cp310-musllinux_1_1_aarch64.whl", hash = "sha256:707f92ccbf4db4cb0c78db72c2c8893c5499d06fe1ca9b1aacf2e6782bbbd97d"},
+    {file = "flashlight_text-0.0.7-cp310-cp310-musllinux_1_1_x86_64.whl", hash = "sha256:d27cf946ad67d6acc2f5db187438a71baf2d3a06a39ca2197be41e7ee4e561e0"},
+    {file = "flashlight_text-0.0.7-cp310-cp310-win_amd64.whl", hash = "sha256:b452c3a22174f8c036599f53d111d1fd85f1cad68b168a623aecdb355fb87841"},
+    {file = "flashlight_text-0.0.7-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:b2029d66b620485259dcfe60a3b613e007ba0e1082b89e991b4efc05a12c37f8"},
+    {file = "flashlight_text-0.0.7-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:616976c844e7f542f1b9d3f434b530b87022cd0d20357a2ebb289fe39658d737"},
+    {file = "flashlight_text-0.0.7-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:4d3f773b582693e427a3e522125ca1d67d17ae4e90cdec5bbe7d88f6ac6d03ec"},
+    {file = "flashlight_text-0.0.7-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:712674deb2b5636852dd901400e231a1cb59e84290660b2b4c6166bbe5ba6a1a"},
+    {file = "flashlight_text-0.0.7-cp311-cp311-musllinux_1_1_aarch64.whl", hash = "sha256:77a281109569dfb2504d78a63244ea3508b9212a822a5ad4e319ec84cb881ab8"},
+    {file = "flashlight_text-0.0.7-cp311-cp311-musllinux_1_1_x86_64.whl", hash = "sha256:4bb966cdc87f32af304d50c2d29ab1a34544bea5e4dff653e5c7a804f3b6a331"},
+    {file = "flashlight_text-0.0.7-cp311-cp311-win_amd64.whl", hash = "sha256:a2ff9b633ffb0b22d25ef4164a03209930f3afb560abdb2e70d34a88275d7385"},
+    {file = "flashlight_text-0.0.7-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:1bbc4ac16516a90eab302a0c573484e896a0d337fbc1fac18a8ad2097024c22f"},
+    {file = "flashlight_text-0.0.7-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:be0b68c25c38b518db389bc00e8e637f53cb73e6336d11e50a422dd398bc63a0"},
+    {file = "flashlight_text-0.0.7-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:cbfafc3ed32e5aeec17ac2c14ffbe0f1a8b7cd873a0349859182e546c7246964"},
+    {file = "flashlight_text-0.0.7-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:6570039ce70429cecb84ea3c6bae212607c5f0b97c0cd769aed7276ad4a70361"},
+    {file = "flashlight_text-0.0.7-cp312-cp312-musllinux_1_1_aarch64.whl", hash = "sha256:c314908d2621d77782ecfda2101f3eb5c516862234135a7765bda146ca23bd0e"},
+    {file = "flashlight_text-0.0.7-cp312-cp312-musllinux_1_1_x86_64.whl", hash = "sha256:61b0c4af1972aabcd986ec5c5c816dd88780d31028202e0f3604b6791c7b7753"},
+    {file = "flashlight_text-0.0.7-cp312-cp312-win_amd64.whl", hash = "sha256:6c64925076d3465e6162a62db4039fe4c68ce4144daeff1acab41547311f4c56"},
+    {file = "flashlight_text-0.0.7-cp36-cp36m-macosx_10_9_x86_64.whl", hash = "sha256:a0e316dd781427aa9bdb9222de29b1db72f1351a449aaab3225d1fd4ae9b88a6"},
+    {file = "flashlight_text-0.0.7-cp36-cp36m-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:1a5251c307185996f58fdb62e2a41e01d996aa758c518df9b18ed435c82051ef"},
+    {file = "flashlight_text-0.0.7-cp36-cp36m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c3d1133481da10a21105b7a828765ef34b0807115d7aa9d60f67439082aed894"},
+    {file = "flashlight_text-0.0.7-cp36-cp36m-musllinux_1_1_aarch64.whl", hash = "sha256:a1b4f59af35c99fbe67f4e516d2a92224a865318985b49c386ed8c6a2bca8a30"},
+    {file = "flashlight_text-0.0.7-cp36-cp36m-musllinux_1_1_x86_64.whl", hash = "sha256:4c428d4034a115ecdcb7490a1d2b766ec08cb349063c7455f74d08dd0ee7e790"},
+    {file = "flashlight_text-0.0.7-cp36-cp36m-win_amd64.whl", hash = "sha256:67f91d94c123f4f22020eace4819b7bb0dc383ffdc684d71981c1d1bcb2d32c1"},
+    {file = "flashlight_text-0.0.7-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:6939e97a7afbd2fadb240a62d045fc49f244e657b229b4d39a0be3256d21bdf2"},
+    {file = "flashlight_text-0.0.7-cp37-cp37m-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:d97fb0022bee96e4d32e5383d35a301cf781a9d25a7eb4d268bb609e4dce36b9"},
+    {file = "flashlight_text-0.0.7-cp37-cp37m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:437bd1db669ee899773fa2f4a1156e6be5edb13d89730cd637d758cc0a018d5b"},
+    {file = "flashlight_text-0.0.7-cp37-cp37m-musllinux_1_1_aarch64.whl", hash = "sha256:5a8c46e856644848017bb8a38313bdc4eb08c6c4f62824d4c4856503a1f422ec"},
+    {file = "flashlight_text-0.0.7-cp37-cp37m-musllinux_1_1_x86_64.whl", hash = "sha256:39cac09ca40822e8e5dd9b8852ebb7b2c9aee496b5a067720e1faa7b1c2ae47d"},
+    {file = "flashlight_text-0.0.7-cp37-cp37m-win_amd64.whl", hash = "sha256:99c739452faf6129491fe5aa15dfa9015c42fefb89e6afaf9901d05989799317"},
+    {file = "flashlight_text-0.0.7-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:c943c2ec88f4fcfa35205bf232ee053d2b7f8489a516575b714044d8586abc3e"},
+    {file = "flashlight_text-0.0.7-cp38-cp38-macosx_11_0_arm64.whl", hash = "sha256:60f60eb168e00f2cdbb5b7afd0e833df423972479c519499b70a62c9a37329bd"},
+    {file = "flashlight_text-0.0.7-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:ee5ff2db65ae24032e7fe6428e75128ec6f1916b102a08337ead659749a04e87"},
+    {file = "flashlight_text-0.0.7-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:b4a8eac988c44303913ea21a9188a7af104b3b18de63910065793adf0e7a40d7"},
+    {file = "flashlight_text-0.0.7-cp38-cp38-musllinux_1_1_aarch64.whl", hash = "sha256:0ba45a1a1f027a1eac68449fbcbb6b011b1303bedf0eee269f0586ce6891004e"},
+    {file = "flashlight_text-0.0.7-cp38-cp38-musllinux_1_1_x86_64.whl", hash = "sha256:a08949ebc27fbd0d8898ab38b1ed6d4a6a36814134a850c32b7ac5b59ed48700"},
+    {file = "flashlight_text-0.0.7-cp38-cp38-win_amd64.whl", hash = "sha256:bf8f56dfc10e0bbf0d92a698cce7063976e9ac5f9b8b3f89900f0a1eff4a3c4a"},
+    {file = "flashlight_text-0.0.7-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:4d5c98f9a67f70e17f2b68a234c9f97edb09d3d87c23a5f2cbdc1e93441657ed"},
+    {file = "flashlight_text-0.0.7-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:e0f0715bedc7db7a748ffdb9dd564d1c3587624583081a8e1cec4db0e31c39a0"},
+    {file = "flashlight_text-0.0.7-cp39-cp39-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:a6b507a45f687b1a3dfd5753dfb00897a6cd39de78c2ada5cd5db2f6746b5b28"},
+    {file = "flashlight_text-0.0.7-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:fb1f642cabe8a0c8ca600f1e7346896f3dbee3f81c8c65dc2ec0421bf2fc2b5f"},
+    {file = "flashlight_text-0.0.7-cp39-cp39-musllinux_1_1_aarch64.whl", hash = "sha256:ed2fd1f29c6beda8ed0de1a3f0bd249553676defbe584b4342cf2b3833294419"},
+    {file = "flashlight_text-0.0.7-cp39-cp39-musllinux_1_1_x86_64.whl", hash = "sha256:bac0c1f33111d27fbe4faee90975d64d49cfe1f4d238ef4a60b7dd492ed3cf2b"},
+    {file = "flashlight_text-0.0.7-cp39-cp39-win_amd64.whl", hash = "sha256:6742e73e16c678edb9d48ea0e278251b1b7d60bdfd87b6154113e30103ec58ca"},
+    {file = "flashlight_text-0.0.7-pp310-pypy310_pp73-macosx_10_9_x86_64.whl", hash = "sha256:dae6639a6b1f0f018ce9329277f06443586bf877662a0e354f3c8074830f52aa"},
+    {file = "flashlight_text-0.0.7-pp310-pypy310_pp73-macosx_11_0_arm64.whl", hash = "sha256:2e9245af2dd69725846a8b7aedc08c6421df447f074437f99a3519d714ad05b9"},
+    {file = "flashlight_text-0.0.7-pp310-pypy310_pp73-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:d08a5fd17aa1dbc200560da898bbe7605111b043a85cb655f6429352b045c169"},
+    {file = "flashlight_text-0.0.7-pp310-pypy310_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:ceb9c09e951a9d8fd6c67ba38124385882ec88489f90609a48d5d6e746e173e1"},
+    {file = "flashlight_text-0.0.7-pp310-pypy310_pp73-win_amd64.whl", hash = "sha256:9aaee83db3a4935f30daddeb4dc8b2bfa71ac546be8ba0423100ab5ad3da93df"},
+    {file = "flashlight_text-0.0.7-pp37-pypy37_pp73-macosx_10_9_x86_64.whl", hash = "sha256:712bef7e55c6f3717058ba7ea7c875c00ee7f874bd10c8cf15514c99b57b7613"},
+    {file = "flashlight_text-0.0.7-pp37-pypy37_pp73-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:198a596b7b57db38b5d392703d73dcbfc3ea5365b2a55a0293cd2e629dd1ad2d"},
+    {file = "flashlight_text-0.0.7-pp37-pypy37_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:9ffb31cae72900568d6d39f31512e3331f18cce009a38c18a0fb2bbcb6ab2ae5"},
+    {file = "flashlight_text-0.0.7-pp37-pypy37_pp73-win_amd64.whl", hash = "sha256:9b4351efd494249ca2a2d009040e7f84c06cdfeaadda43765f44942bcf72d0cb"},
+    {file = "flashlight_text-0.0.7-pp38-pypy38_pp73-macosx_10_9_x86_64.whl", hash = "sha256:e6b82234da1c1fbe2062e668b0df5e50ffc7ec8ba30b6c066624ae821ff8e477"},
+    {file = "flashlight_text-0.0.7-pp38-pypy38_pp73-macosx_11_0_arm64.whl", hash = "sha256:8b2ce34df8d14a9612b3b617b0cd4b1e082359460452de43cd8514a0a8b77f1e"},
+    {file = "flashlight_text-0.0.7-pp38-pypy38_pp73-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:7ad9ba474667a0db7eab71138b73595f43816f88a49922e15683c38240b84d1d"},
+    {file = "flashlight_text-0.0.7-pp38-pypy38_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:6230d7f0d74d033f72c540b8a99b88c7d3e8be66fd3115956e8f97225e4df83e"},
+    {file = "flashlight_text-0.0.7-pp38-pypy38_pp73-win_amd64.whl", hash = "sha256:711aea859fd9b48719d2cdc73fe5e869a75d5f8464cc14ec7c4a0ee89e2b06f0"},
+    {file = "flashlight_text-0.0.7-pp39-pypy39_pp73-macosx_10_9_x86_64.whl", hash = "sha256:d7f7222adfa94452038b923d43b73c2bb32636ace4feb9916beee1485553f71b"},
+    {file = "flashlight_text-0.0.7-pp39-pypy39_pp73-macosx_11_0_arm64.whl", hash = "sha256:278bfff804c2b727847da218fc631273a3eb0c4c107754425c2aec5a70850d62"},
+    {file = "flashlight_text-0.0.7-pp39-pypy39_pp73-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:2f9a2b27e3ff4ab5a26fb60db42b97db87c883e6c0b435fd179be98c3516a99d"},
+    {file = "flashlight_text-0.0.7-pp39-pypy39_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:7bacf125fba237ace4dd97f19510abd1c0b32c91c7c84225b64adaab41a610ec"},
+    {file = "flashlight_text-0.0.7-pp39-pypy39_pp73-win_amd64.whl", hash = "sha256:aa0707f23cf2683aedcf880d6c4a2b641176cfa49466620dd41bcccb48f5bf2d"},
+]
+
+[[package]]
 name = "flatbuffers"
 version = "24.12.23"
 description = "The FlatBuffers serialization format for Python"
@@ -1333,14 +1410,14 @@ zstd = ["zstandard (>=0.18.0)"]
 
 [[package]]
 name = "huggingface-hub"
-version = "0.27.1"
+version = "0.28.0"
 description = "Client library to download and publish models, datasets and other repos on the huggingface.co hub"
 optional = false
 python-versions = ">=3.8.0"
 groups = ["main"]
 files = [
-    {file = "huggingface_hub-0.27.1-py3-none-any.whl", hash = "sha256:1c5155ca7d60b60c2e2fc38cbb3ffb7f7c3adf48f824015b219af9061771daec"},
-    {file = "huggingface_hub-0.27.1.tar.gz", hash = "sha256:c004463ca870283909d715d20f066ebd6968c2207dae9393fdffb3c1d4d8f98b"},
+    {file = "huggingface_hub-0.28.0-py3-none-any.whl", hash = "sha256:71cff4e500efe68061d94b7f6d3114e183715088be7a90bf4dd84af83b5f5cdb"},
+    {file = "huggingface_hub-0.28.0.tar.gz", hash = "sha256:c2b18c02a47d4384763caddb4d0ab2a8fc6c16e0800d6de4d55d0a896244aba3"},
 ]
 
 [package.dependencies]
@@ -1353,13 +1430,13 @@ tqdm = ">=4.42.1"
 typing-extensions = ">=3.7.4.3"
 
 [package.extras]
-all = ["InquirerPy (==0.3.4)", "Jinja2", "Pillow", "aiohttp", "fastapi", "gradio (>=4.0.0)", "jedi", "libcst (==1.4.0)", "mypy (==1.5.1)", "numpy", "pytest (>=8.1.1,<8.2.2)", "pytest-asyncio", "pytest-cov", "pytest-env", "pytest-mock", "pytest-rerunfailures", "pytest-vcr", "pytest-xdist", "ruff (>=0.5.0)", "soundfile", "types-PyYAML", "types-requests", "types-simplejson", "types-toml", "types-tqdm", "types-urllib3", "typing-extensions (>=4.8.0)", "urllib3 (<2.0)"]
+all = ["InquirerPy (==0.3.4)", "Jinja2", "Pillow", "aiohttp", "fastapi", "gradio (>=4.0.0)", "jedi", "libcst (==1.4.0)", "mypy (==1.5.1)", "numpy", "pytest (>=8.1.1,<8.2.2)", "pytest-asyncio", "pytest-cov", "pytest-env", "pytest-mock", "pytest-rerunfailures", "pytest-vcr", "pytest-xdist", "ruff (>=0.9.0)", "soundfile", "types-PyYAML", "types-requests", "types-simplejson", "types-toml", "types-tqdm", "types-urllib3", "typing-extensions (>=4.8.0)", "urllib3 (<2.0)"]
 cli = ["InquirerPy (==0.3.4)"]
-dev = ["InquirerPy (==0.3.4)", "Jinja2", "Pillow", "aiohttp", "fastapi", "gradio (>=4.0.0)", "jedi", "libcst (==1.4.0)", "mypy (==1.5.1)", "numpy", "pytest (>=8.1.1,<8.2.2)", "pytest-asyncio", "pytest-cov", "pytest-env", "pytest-mock", "pytest-rerunfailures", "pytest-vcr", "pytest-xdist", "ruff (>=0.5.0)", "soundfile", "types-PyYAML", "types-requests", "types-simplejson", "types-toml", "types-tqdm", "types-urllib3", "typing-extensions (>=4.8.0)", "urllib3 (<2.0)"]
+dev = ["InquirerPy (==0.3.4)", "Jinja2", "Pillow", "aiohttp", "fastapi", "gradio (>=4.0.0)", "jedi", "libcst (==1.4.0)", "mypy (==1.5.1)", "numpy", "pytest (>=8.1.1,<8.2.2)", "pytest-asyncio", "pytest-cov", "pytest-env", "pytest-mock", "pytest-rerunfailures", "pytest-vcr", "pytest-xdist", "ruff (>=0.9.0)", "soundfile", "types-PyYAML", "types-requests", "types-simplejson", "types-toml", "types-tqdm", "types-urllib3", "typing-extensions (>=4.8.0)", "urllib3 (<2.0)"]
 fastai = ["fastai (>=2.4)", "fastcore (>=1.3.27)", "toml"]
 hf-transfer = ["hf-transfer (>=0.1.4)"]
 inference = ["aiohttp"]
-quality = ["libcst (==1.4.0)", "mypy (==1.5.1)", "ruff (>=0.5.0)"]
+quality = ["libcst (==1.4.0)", "mypy (==1.5.1)", "ruff (>=0.9.0)"]
 tensorflow = ["graphviz", "pydot", "tensorflow"]
 tensorflow-testing = ["keras (<3.0)", "tensorflow"]
 testing = ["InquirerPy (==0.3.4)", "Jinja2", "Pillow", "aiohttp", "fastapi", "gradio (>=4.0.0)", "jedi", "numpy", "pytest (>=8.1.1,<8.2.2)", "pytest-asyncio", "pytest-cov", "pytest-env", "pytest-mock", "pytest-rerunfailures", "pytest-vcr", "pytest-xdist", "soundfile", "urllib3 (<2.0)"]
@@ -2068,6 +2145,17 @@ groups = ["main"]
 files = [
     {file = "jupyterlab_widgets-3.0.13-py3-none-any.whl", hash = "sha256:e3cda2c233ce144192f1e29914ad522b2f4c40e77214b0cc97377ca3d323db54"},
     {file = "jupyterlab_widgets-3.0.13.tar.gz", hash = "sha256:a2966d385328c1942b683a8cd96b89b8dd82c8b8f81dda902bb2bc06d46f5bed"},
+]
+
+[[package]]
+name = "kenlm"
+version = "0.2.0"
+description = ""
+optional = false
+python-versions = "*"
+groups = ["main"]
+files = [
+    {file = "kenlm-0.2.0.tar.gz", hash = "sha256:c2dc1dc09d3c150e6a1777ef0fd5cac3688e1dc1cc13e41472d0284e5e88ac7f"},
 ]
 
 [[package]]
@@ -6643,4 +6731,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = "3.11.7"
-content-hash = "9ac5a74b59f2bc3afb779922182f36b369eef7c8e37e89dd78bf5ba6b7afc872"
+content-hash = "88454ba064c8961f8b0c4b2c43e89f54dce1c7489069652b27f997d091d65391"

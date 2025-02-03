@@ -115,8 +115,9 @@ def text_to_ipa(text, language="fr"):
 
 ipa_to_target = {
     # Vowels
-    "a": "a", "ɑ": "a", "ə": "e", "ɛ": "e", "ø": "e^", "œ": "e^", "i": "i", "y": "y", 
-    "u": "u", "o": "o", "ɔ": "o^", "ɑ̃": "a~", "ɛ̃": "e~", "ɔ̃": "o~",
+    "a": "a", "ɑ": "a", "ə": "x", "ɛ": "e^", "ø": "x", "œ": "e^", "i": "i", "y": "y", "e": "e",
+    "u": "u", "o": "o", "ɔ": "o^", "ɑ̃": "a~", "ɛ̃": "e~", "ɔ̃": "o~", "œ̃": "x~", "œ̃": "x^",
+    " ": " ",  # Space
 
     # Consonants
     "b": "b", "c": "k", "d": "d", "f": "f", "ɡ": "g", "j": "j", "k": "k", "l": "l", 
@@ -142,7 +143,7 @@ def convert_ipa_to_syllables(ipa_text, ipa_to_target):
             i += 2  # Skip the diacritic in the next iteration
         else:
             # Map the single character
-            mapped_char = ipa_to_target.get(char, char)
+            mapped_char = ipa_to_target.get(char, "<UNK>")
             converted_text.append(mapped_char)
             i += 1
     return "".join(converted_text)
@@ -164,23 +165,27 @@ def syllabify_ipa_worker(ipa_sentence):
     """
     syllables = syllabify_ipa(ipa_sentence)
     new_syllables = convert_ipa_to_syllables(" ".join(syllables), ipa_to_target)
+    if "<UNK>" in new_syllables:
+        return []
     return new_syllables
 
-# load ipa sentences
-ipa_path = "/scratch2/bsow/Documents/ACSR/data/claire_dialogue/ipa_train.txt"
-ipa_sentences = []
-with open(ipa_path, "r", encoding="utf-8") as file:
-    for line in file:
-        ipa_sentences.append(line.strip())
+if __name__ == "__main__":
+    # load ipa sentences
+    ipa_path = "/scratch2/bsow/Documents/ACSR/data/claire_dialogue/ipa_train.txt"
+    ipa_sentences = []
+    with open(ipa_path, "r", encoding="utf-8") as file:
+        for line in file:
+            ipa_sentences.append(line.strip())
 
-# Use multiprocessing to syllabify IPA sentences
-with multiprocessing.Pool(15) as pool:
-    syllabized_ipa_sentences = pool.map(syllabify_ipa_worker, ipa_sentences)
+    # Use multiprocessing to syllabify IPA sentences
+    with multiprocessing.Pool(15) as pool:
+        syllabized_ipa_sentences = pool.map(syllabify_ipa_worker, ipa_sentences)
 
-# Save the syllabized IPA sentences to a file
-syllabized_ipa_output_path = "/scratch2/bsow/Documents/ACSR/data/claire_dialogue/syllabized_ipa_train.txt"
-with open(syllabized_ipa_output_path, "w", encoding="utf-8") as file:
-    for syllables in syllabized_ipa_sentences:
-        file.write("".join(syllables) + "\n")
+    # Save the syllabized IPA sentences to a file
+    syllabized_ipa_output_path = "/scratch2/bsow/Documents/ACSR/data/claire_dialogue/syllabized_ipa_train.txt"
+    with open(syllabized_ipa_output_path, "w", encoding="utf-8") as file:
+        for syllables in syllabized_ipa_sentences:
+            if len(syllables) > 0:
+                file.write("".join(syllables) + "\n")
 
-print(f"Syllabized IPA sentences saved to {syllabized_ipa_output_path}")
+    print(f"Syllabized IPA sentences saved to {syllabized_ipa_output_path}")
