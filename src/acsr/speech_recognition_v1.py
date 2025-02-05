@@ -249,7 +249,12 @@ def map_syllable_to_cue(syllable):
                 hand_position = vowel_positions.get("ɛ̃", 50)  # Default to Position 2
             elif vowel[0] == "ɑ":
                 hand_position = vowel_positions.get("ɑ̃", 57)
-            return hand_shape, hand_position
+            try:
+                print("Syllable error: ", syllable)
+                return hand_shape, hand_position
+            except:
+                print("Syllable error: ", syllable)
+                raise ValueError("Error")
         
         if consonant in consonants and vowel in vowels:
             hand_shape = consonant_to_handshape.get(consonant, 1)  # Default to Hand Shape 1
