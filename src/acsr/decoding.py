@@ -483,62 +483,80 @@ def greedy_decoder(output, blank):
         decodes.append(decode)
     return decodes
 
-
-import torch
 import math
-
-import torch
 
 def logsumexp(a, b):
     # Combine two log values in a numerically stable manner using torch.logaddexp.
     return torch.logaddexp(torch.tensor(a), torch.tensor(b)).item()
+import torch
+import torch.nn.functional as F
 
 def remove_duplicates_and_blanks(seq, blank_idx):
     """
-    Remove consecutive duplicate tokens and then remove blanks.
-    
-    Args:
-        seq: List of token indices.
-        blank_idx: Index of the blank token.
-    
-    Returns:
-        List of cleaned token indices.
+    Remove consecutive duplicate tokens and then remove all blank tokens.
     """
     cleaned_seq = []
     prev_token = None
     for token in seq:
         if token == blank_idx:
-            prev_token = None  # Reset on blank
+            prev_token = None
         elif token != prev_token:
             cleaned_seq.append(token)
             prev_token = token
     return cleaned_seq
 
+def remove_blanks(seq, blank_idx):
+    """Remove blank tokens from a candidate sequence."""
+    return [s for s in seq if s != blank_idx]
+
+def compute_lm_score(seq, nextsyllable_model, sos_idx, pad_idx, max_seq_len, device):
+    """
+    Compute the LM log score for a candidate syllable sequence.
+    The LM is applied starting from the second token (i.e. after prepending <SOS>).
+    The prefix is left-padded with the <PAD> token to max_seq_len.
+    """
+    if not seq:
+        return 0.0
+    lm_score = 0.0
+    # Prepend the <SOS> token
+    seq = [sos_idx] + seq  
+    for i in range(1, len(seq)):
+        prefix = seq[:i]
+        if len(prefix) < max_seq_len:
+            padded_prefix = [pad_idx] * (max_seq_len - len(prefix)) + prefix
+        else:
+            padded_prefix = prefix[-max_seq_len:]
+        input_tensor = torch.tensor(padded_prefix, dtype=torch.long, device=device).unsqueeze(0)
+        lm_logits = nextsyllable_model(input_tensor)  # shape: (1, vocab_size)
+        lm_log_probs = F.log_softmax(lm_logits, dim=-1)
+        token_log_prob = lm_log_probs[0, seq[i]].item()
+        lm_score += token_log_prob
+    return lm_score
+
 def ctc_beam_search(ctc_logits, beam_width, blank_idx, 
                     nextsyllable_model, sos_idx, pad_idx, max_seq_len, device, alpha,
-                    test=False, prune_every_step=True, prune_interval=5):
+                    test=False, prune_every_step=True, prune_interval=4):
     """
-    A simplified beam search over the CTC outputs that merges candidates based on their
-    collapsed (final) output and integrates a language model score during pruning.
-
+    A simplified CTC beam search that merges candidates based on their collapsed output.
+    At specified prune intervals, LM scoring is applied and beams are pruned by the combined
+    acoustic+LM score.
+    
     Args:
-        ctc_logits: Tensor of shape (T, V) for one sample,
-                    where T is the number of time steps and V is the vocabulary size.
+        ctc_logits: Tensor of shape (T, V) for one sample.
         beam_width: Number of candidates to keep (final or at each pruning step).
         blank_idx: Index of the blank token.
-        nextsyllable_model: The LM used to score candidate sequences.
-        sos_idx: Index of the "<SOS>" token.
-        pad_idx: Index of the "<PAD>" token.
-        max_seq_len: Maximum input length for the LM.
+        nextsyllable_model: The LM for next-syllable prediction.
+        sos_idx: Index of the <SOS> token.
+        pad_idx: Index of the <PAD> token.
+        max_seq_len: Maximum LM input length.
         device: Torch device.
-        alpha: Weight factor for combining the LM score with the acoustic score.
-        test: If True, print debugging information at each time step.
-        prune_every_step: If True, perform pruning every 'prune_interval' steps.
+        alpha: Weight for the LM score.
+        test: If True, print debug info.
+        prune_every_step: If True, prune at intervals.
         prune_interval: Prune beams every 'prune_interval' time steps.
         
     Returns:
-        A list of tuples (candidate_seq, combined_score) where candidate_seq is a list of token indices,
-        and combined_score is the final score (acoustic score + alpha * LM score) of that candidate.
+        A list of tuples (collapsed_seq, combined_score) where collapsed_seq is a list of token indices.
     """
     T, V = ctc_logits.shape
     # Each beam is a tuple: (raw_seq, collapsed_seq, acoustic_score)
@@ -546,35 +564,43 @@ def ctc_beam_search(ctc_logits, beam_width, blank_idx,
     
     for t in range(T):
         new_beams = {}
-        # Compute top-k once for this time step.
+        # Compute top-k for current time step once.
         log_probs_t = torch.log_softmax(ctc_logits[t], dim=0)  # shape: (V,)
         topk_log_probs, topk_indices = torch.topk(log_probs_t, beam_width)
         topk_tokens = topk_indices.tolist()
         topk_scores = topk_log_probs.tolist()
-        # if the blank character have probability more than 0.9, just maintain the previous beams
-        if topk_tokens[0] == blank_idx and math.exp(topk_scores[0]) > 0.9:
-            print("Time step", t, "token", topk_tokens[0], "score", topk_scores[0], "prob", math.exp(topk_scores[0]))
-            continue
-        # Extend every beam with the same top-k tokens.
-        for raw_seq, collapsed_seq, acoustic_score in beams:
-            for token, token_score in zip(topk_tokens, topk_scores):
-                new_acoustic_score = acoustic_score + token_score
-                new_raw_seq = raw_seq + (token,)
-                # Compute collapsed sequence from new_raw_seq.
-                new_collapsed = tuple(remove_duplicates_and_blanks(new_raw_seq, blank_idx))
-                # Merge candidates: if the same collapsed sequence already exists, update the score using max.
-                if new_collapsed in new_beams:
-                    prev_raw, prev_score = new_beams[new_collapsed]
-                    new_beams[new_collapsed] = (new_raw_seq, max(prev_score, new_acoustic_score))
-                else:
-                    new_beams[new_collapsed] = (new_raw_seq, new_acoustic_score)
+        
         if t == 0:
-            # consider only the first top beam candidate (the one with the highest score)
-            new_beams = {k: v for k, v in new_beams.items() if v[1] == max(v[1] for v in new_beams.values())}
-            
-        # At pruning intervals, integrate the LM score into the beam selection.
+            # At t=0, consider only the best candidate.
+            token = topk_tokens[0]
+            new_score = topk_scores[0]
+            new_raw_seq = (token,)
+            new_collapsed = tuple(remove_duplicates_and_blanks(new_raw_seq, blank_idx))
+            new_beams[new_collapsed] = (new_raw_seq, new_score)
+        else:
+            # Special-case: if blank is top with very high probability, extend each beam with blank only.
+            if topk_tokens[0] == blank_idx and torch.exp(torch.tensor(topk_scores[0])) > 0.9:
+                for raw_seq, _, acoustic_score in beams:
+                    new_score = acoustic_score + topk_scores[0]
+                    new_raw_seq = raw_seq + (blank_idx,)
+                    new_collapsed = tuple(remove_duplicates_and_blanks(new_raw_seq, blank_idx))
+                    new_beams[new_collapsed] = (new_raw_seq, new_score)
+            else:
+                # Extend every beam with each of the top-k tokens.
+                for raw_seq, _, acoustic_score in beams:
+                    for token, token_score in zip(topk_tokens, topk_scores):
+                        new_score = acoustic_score + token_score
+                        new_raw_seq = raw_seq + (token,)
+                        new_collapsed = tuple(remove_duplicates_and_blanks(new_raw_seq, blank_idx))
+                        if new_collapsed in new_beams:
+                            prev_raw, prev_score = new_beams[new_collapsed]
+                            new_beams[new_collapsed] = (new_raw_seq, max(prev_score, new_score))
+                        else:
+                            new_beams[new_collapsed] = (new_raw_seq, new_score)
+        
+        # If it's a pruning interval, integrate LM scores.
         if prune_every_step and ((t + 1) % prune_interval == 0):
-            # First prune on only the acoustic score and take the first 1000 candidates.
+            # First, select a large number (e.g. top 1000) based on acoustic score.
             candidates = sorted(new_beams.items(), key=lambda x: x[1][1], reverse=True)[:1000]
             new_beams = {k: v for k, v in candidates}
             candidates = []
@@ -583,28 +609,14 @@ def ctc_beam_search(ctc_logits, beam_width, blank_idx,
                 lm_score = compute_lm_score(candidate_seq, nextsyllable_model, sos_idx, pad_idx, max_seq_len, device)
                 combined_score = acoustic_score + alpha * lm_score
                 candidates.append((raw_seq, collapsed, acoustic_score, combined_score))
-            # Sort by combined score (descending) and keep top candidates.
             candidates = sorted(candidates, key=lambda x: x[3], reverse=True)[:beam_width]
-            # Reinitialize beams with the acoustic score (for extension) and store the collapsed sequence.
-            beams = [(raw_seq, collapsed, acoustic_score) for raw_seq, collapsed, acoustic_score, combined_score in candidates]
+            beams = [(raw_seq, collapsed, acoustic_score) for raw_seq, collapsed, acoustic_score, _ in candidates]
         else:
-            # Otherwise, simply update beams with all candidates from this time step.
             beams = [(raw_seq, collapsed, acoustic_score) for collapsed, (raw_seq, acoustic_score) in new_beams.items()]
         
-        if test:
-            print(f"Time step {t}:")
-            if prune_every_step and ((t + 1) % prune_interval == 0):
-                for raw_seq, collapsed, acoustic_score, combined_score in sorted(candidates, key=lambda x: x[3], reverse=True)[:beam_width]:
-                    print(" ".join([index_to_phoneme[idx] for idx in collapsed]),
-                          f"Acoustic: {acoustic_score:.2f}, Combined: {combined_score:.2f}")
-            else:
-                for raw_seq, collapsed, acoustic_score in sorted(beams, key=lambda x: x[2], reverse=True)[:beam_width]:
-                    print(" ".join([index_to_phoneme[idx] for idx in collapsed]),
-                          f"Acoustic: {acoustic_score:.2f}")
-            print("Number of beams:", len(beams))
-            print()
+        # (Optional debug prints removed.)
     
-    # Final pruning: Compute LM scores for all remaining candidates and choose the best based on combined score.
+    # Final pruning: apply LM scoring to all remaining candidates.
     final_candidates = []
     for raw_seq, collapsed, acoustic_score in beams:
         candidate_seq = list(collapsed)
@@ -612,200 +624,64 @@ def ctc_beam_search(ctc_logits, beam_width, blank_idx,
         combined_score = acoustic_score + alpha * lm_score
         final_candidates.append((raw_seq, collapsed, acoustic_score, combined_score))
     final_candidates = sorted(final_candidates, key=lambda x: x[3], reverse=True)[:beam_width]
-    
-    # Return the collapsed sequences and their combined score.
-    return [(list(collapsed), combined_score) for _, collapsed, acoustic_score, combined_score in final_candidates]
+    return [(list(collapsed), combined_score) for _, collapsed, _, combined_score in final_candidates]
 
-
-
-
-def remove_blanks(seq, blank_idx):
-    """Remove blank tokens from a candidate sequence (list of indices)."""
-    return [s for s in seq if s != blank_idx]
-
-def compute_lm_score(seq, nextsyllable_model, sos_idx, pad_idx, max_seq_len, device):
+def beam_search_decode(cuedspeech_model, nextsyllable_model, inputs_hand_shape, inputs_hand_pos, inputs_lips,
+                       blank_idx, index_to_syllable, beam_width=5, alpha=0.7, device="cuda", max_seq_len=15, test=False):
     """
-    Compute the LM log score for a candidate syllable sequence (list of indices).
-    
-    The LM is applied starting from the second token, with the <SOS> token prepended to the sequence.
-    The prefix is left-padded with the <PAD> token to max_seq_len.
-    
-    Args:
-        seq: List of token indices (non-blank) representing the candidate sequence.
-        nextsyllable_model: The next-syllable language model.
-        sos_idx: Index for the "<SOS>" token.
-        pad_idx: Index for the "<PAD>" token.
-        max_seq_len: Maximum LM input length.
-        device: Torch device.
-    
-    Returns:
-        Sum of LM log probabilities (float).
-    """
-    #if len(seq) == 0:
-    #    return 0.0  # No LM scoring if there are no tokens.
-
-    # Prepend the <SOS> token to the candidate sequence.
-    #seq = [sos_idx] + seq
-    lm_score = 0.0
-
-    # Start LM scoring from the second token (index 1) onward.
-    # For each token in the sequence (excluding <SOS>), compute the probability
-    # given the preceding prefix.
-    for i in range(1, len(seq)):
-        # Prefix is all tokens before the current token.
-        prefix = seq[:i]
-        # Left-pad the prefix to a fixed length.
-        if len(prefix) < max_seq_len:
-            padded_prefix = [pad_idx] * (max_seq_len - len(prefix)) + prefix
-        else:
-            padded_prefix = prefix[-max_seq_len:]
-        # Create tensor of shape (1, max_seq_len).
-        input_tensor = torch.tensor(padded_prefix, dtype=torch.long, device=device).unsqueeze(0)
-        # Get LM logits over the vocabulary for the next token.
-        lm_logits = nextsyllable_model(input_tensor)  # shape: (1, vocab_size)
-        lm_log_probs = F.log_softmax(lm_logits, dim=-1)
-        # Get log probability for the actual token at position i.
-        token_log_prob = lm_log_probs[0, seq[i]].item()
-        lm_score += token_log_prob
-
-    return lm_score
-
-
-def beam_search_decode(
-    cuedspeech_model,
-    nextsyllable_model,
-    inputs_hand_shape,
-    inputs_hand_pos,
-    inputs_lips,
-    blank_idx,
-    index_to_syllable,
-    beam_width=5,
-    alpha=0.7,
-    device="cuda",
-    max_seq_len=15,
-    test=False
-):
-    """
-    Two-stage decoding for a single sample:
-      Stage 1: Run CTC beam search on the cued speech model outputs.
-      Stage 2: Rescore the candidates with the next-syllable LM.
-    
-    Args:
-        cuedspeech_model: The acoustic (CTC) model.
-        nextsyllable_model: The language model for next-syllable prediction.
-        inputs_hand_shape, inputs_hand_pos, inputs_lips: Tensors for one sample.
-        blank_idx: Blank token index.
-        index_to_syllable: Mapping from indices to syllable strings.
-        beam_width: Beam width for CTC beam search.
-        alpha: LM weight.
-        device: Torch device.
-        max_seq_len: Maximum LM input length.
-    
-    Returns:
-        The best decoded syllable sequence (list of syllable strings).
+    Run beam search decoding on a single sample.
     """
     cuedspeech_model.eval()
     with torch.no_grad():
-        # Forward pass for one sample; note that each input is expected to have shape (1, T, features)
         ctc_logits, _ = cuedspeech_model(
             inputs_hand_shape.to(device),
             inputs_hand_pos.to(device),
             inputs_lips.to(device)
         )
-    # ctc_logits: (batch, T, V); batch=1 here
-    ctc_logits = ctc_logits[0]  # Now shape: (T, V)
-    
-    
-    # Determine the <PAD> token index from index_to_syllable.
+    # Process only the first sample (batch=1)
+    ctc_logits = ctc_logits[0]
     pad_idx = phoneme_to_index["<PAD>"]
     sos_idx = phoneme_to_index["<SOS>"]
-    
-    # Stage 1: Run beam search over CTC outputs.
     candidates = ctc_beam_search(ctc_logits, beam_width=beam_width, blank_idx=blank_idx,
                                  nextsyllable_model=nextsyllable_model, sos_idx=sos_idx, pad_idx=pad_idx,
                                  max_seq_len=max_seq_len, device=device, alpha=alpha, test=test)
-    
-    # Stage 2: Rescore candidates with the LM.
-    rescored_candidates = candidates
-    print("Top candidates:")
-    if test:
-        for seq, score in sorted(rescored_candidates, key=lambda x: x[1], reverse=True)[:30]:
-            print(" ".join([index_to_syllable[idx] for idx in seq]), f"({score:.2f})")
-    else:
-        for seq, score in sorted(rescored_candidates, key=lambda x: x[1], reverse=True)[:8]:
-            print(" ".join([index_to_syllable[idx] for idx in seq]), f"({score:.2f})")
-        
-    best_candidate, best_score = max(rescored_candidates, key=lambda x: x[1])
-    print("Best candidate:", " ".join([index_to_syllable[idx] for idx in best_candidate]), f"({best_score:.2f})")
-    print()
-    decoded_sequence = [index_to_syllable[idx] for idx in best_candidate]
-    return decoded_sequence
+    best_candidate, best_score = max(candidates, key=lambda x: x[1])
+    print("Best candidate score:", best_score, "Best candidate:", [index_to_syllable[idx] for idx in best_candidate])
+    return [index_to_syllable[idx] for idx in best_candidate]
 
-def decode_loader_beam(model, nextsyllable_model, loader, blank, index_to_syllable, device="cuda", beam_width=5, alpha=0.4, max_seq_len=15, test=False):
+def decode_loader_beam(cuedspeech_model, nextsyllable_model, loader, blank, index_to_syllable, device="cuda",
+                       beam_width=5, alpha=0.4, max_seq_len=15, test=False):
     """
-    Decode sequences from a DataLoader using beam search decoding with LM rescoring.
-    
-    For each sample in the batch, the acoustic (CTC) model's output is rescored using the next-syllable LM.
-    The LM ignores blank tokens, and LM scoring begins only from the second non-blank syllable.
-    The LM input is left-padded with the "<PAD>" token to a fixed max_seq_len.
-    
-    Args:
-        model: The JointCTCAttentionModel (acoustic model).
-        nextsyllable_model: The language model for next-syllable prediction.
-        loader: DataLoader yielding (hand_shape, hand_pos, lips, batch_y).
-        blank: Blank token index.
-        index_to_syllable: Dictionary mapping indices to syllable strings.
-        device: Torch device.
-        beam_width: Beam width for beam search.
-        alpha: LM weight for rescoring.
-        max_seq_len: Maximum length for LM input.
-    
-    Returns:
-        Tuple (all_decoded_sequences, all_true_sequences), where each is a list of decoded syllable sequences.
+    Decode all samples from a DataLoader using beam search decoding.
     """
-    model.eval()
+    cuedspeech_model.eval()
     all_decoded_sequences = []
     all_true_sequences = []
-
     with torch.no_grad():
         for batch_X_hand_shape, batch_X_hand_pos, batch_X_lips, batch_y in loader:
             batch_X_hand_shape = batch_X_hand_shape.to(device)
             batch_X_hand_pos = batch_X_hand_pos.to(device)
             batch_X_lips = batch_X_lips.to(device)
             batch_y = batch_y.to(device)
-            
-            # Process each sample in the batch separately.
             for i in range(batch_X_hand_shape.size(0)):
-                sample_hand_shape = batch_X_hand_shape[i].unsqueeze(0)  # (1, T, features)
+                sample_hand_shape = batch_X_hand_shape[i].unsqueeze(0)
                 sample_hand_pos   = batch_X_hand_pos[i].unsqueeze(0)
                 sample_lips       = batch_X_lips[i].unsqueeze(0)
-                
-                decoded_sequence = beam_search_decode(
-                    cuedspeech_model=model,
-                    nextsyllable_model=nextsyllable_model,
-                    inputs_hand_shape=sample_hand_shape,
-                    inputs_hand_pos=sample_hand_pos,
-                    inputs_lips=sample_lips,
-                    blank_idx=blank,
-                    index_to_syllable=index_to_syllable,
-                    beam_width=beam_width,
-                    alpha=alpha,
-                    device=device,
-                    max_seq_len=max_seq_len,
-                    test=test
-                )
+                decoded_sequence = beam_search_decode(cuedspeech_model, nextsyllable_model,
+                                                      sample_hand_shape, sample_hand_pos, sample_lips,
+                                                      blank_idx=blank, index_to_syllable=index_to_syllable,
+                                                      beam_width=beam_width, alpha=alpha, device=device,
+                                                      max_seq_len=max_seq_len, test=test)
                 all_decoded_sequences.append(decoded_sequence)
-            
-            # Convert true labels to syllable sequences.
             for sequence in batch_y:
-                seq_syllables = [
-                    index_to_syllable[idx.item()]
-                    for idx in sequence
-                    if idx != blank and index_to_syllable[idx.item()] != " "
-                ]
+                seq_syllables = [index_to_syllable[idx.item()] for idx in sequence if idx != blank and index_to_syllable[idx.item()] != " "]
                 all_true_sequences.append(seq_syllables)
-
     return all_decoded_sequences, all_true_sequences
+
+
+def remove_blanks(seq, blank_idx):
+    """Remove blank tokens from a candidate sequence (list of indices)."""
+    return [s for s in seq if s != blank_idx]
 
 
 def decode_loader(model, loader, blank, index_to_phoneme, device='cuda'):
@@ -1023,23 +899,23 @@ if __name__ == "__main__":
     # After training your models, perform decoding
     blank_token = phoneme_to_index["<UNK>"]
     beam_width = 8
-    alpha = 1  # Adjust alpha to balance between models
+    alpha = 0.5  # Adjust alpha to balance between models
     
-    #decoded_val_sequences, true_val_sequences = decode_loader_beam(
-    #    acoustic_model, nextsyllable_model, val_loader,
-    #    blank_token, index_to_phoneme, beam_width=beam_width, alpha=alpha, device=device
-    #)
+    decoded_val_sequences, true_val_sequences = decode_loader_beam(
+        acoustic_model, nextsyllable_model, val_loader,
+        blank_token, index_to_phoneme, beam_width=beam_width, alpha=alpha, device=device
+    )
 #
-    #print("Decoded validation syllable sequences:", decoded_val_sequences)
-    #print("True validation syllable sequences:", true_val_sequences)
-    #sys.stdout.flush()
+    print("Decoded validation syllable sequences:", decoded_val_sequences)
+    print("True validation syllable sequences:", true_val_sequences)
+    sys.stdout.flush()
 
     # One sample beam decoding
     test_sample = val_data["X_acoustic_hand_shape"][-1:], val_data["X_acoustic_hand_pos"][-1:], val_data["X_acoustic_lips"][-1:], val_data["y"][-1:]
     test_sample_loader = data_to_dataloader({"X_acoustic_hand_shape": test_sample[0], "X_acoustic_hand_pos": test_sample[1], "X_acoustic_lips": test_sample[2], "y": test_sample[3]}, batch_size=1, shuffle=False)
     decoded_sample, true_sample = decode_loader_beam(
         acoustic_model, nextsyllable_model, test_sample_loader,
-        blank_token, index_to_phoneme, beam_width=beam_width, alpha=alpha, device=device, test=True
+        blank_token, index_to_phoneme, beam_width=beam_width, alpha=alpha, device=device
     )
     print("Decoded sample syllable sequence:", decoded_sample)
     print("True sample syllable sequence:", true_sample)
