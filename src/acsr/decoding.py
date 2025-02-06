@@ -295,7 +295,7 @@ class ThreeStreamFusionEncoder(nn.Module):
         self.lips_gru       = nn.GRU(lips_dim, hidden_dim, n_layers, bidirectional=True, batch_first=True)
         
         # Fusion GRU: note the input size is 3 streams * 2 (bidirectional)
-        self.fusion_gru = nn.GRU(hidden_dim * 6, hidden_dim * 2, n_layers, bidirectional=True, batch_first=True)
+        self.fusion_gru = nn.GRU(hidden_dim * 7, hidden_dim * 3, n_layers, bidirectional=True, batch_first=True)
         
         # CNN for visual lips (unchanged)
         self.visual_lips_cnn = nn.Sequential(
@@ -310,7 +310,7 @@ class ThreeStreamFusionEncoder(nn.Module):
         )
 
         # Cross-modal attention and fusion conformer remain the same
-        self.cross_modal_attention = nn.MultiheadAttention(embed_dim=hidden_dim*6, num_heads=4)
+        self.cross_modal_attention = nn.MultiheadAttention(embed_dim=hidden_dim*7, num_heads=4)
         #self.fusion_conformer = nn.Sequential(*[ConformerBlock(dim=hidden_dim * 3) for _ in range(n_layers)])
     
     def forward(self, hand_shape, hand_pos, lips, visual_lips):
@@ -320,11 +320,11 @@ class ThreeStreamFusionEncoder(nn.Module):
         lips_out, _       = self.lips_gru(lips)
    
         # visual_lips has shape (batch, seq_len, height, width, channels)
-        #batch_size, seq_len, H, W, C = visual_lips.shape
-        #visual_lips = visual_lips.permute(0, 1, 4, 2, 3)
-        #visual_lips = visual_lips.reshape(-1, C, H, W)
-        #visual_lips_out = self.visual_lips_cnn(visual_lips)
-        #visual_lips_out = visual_lips_out.reshape(batch_size, seq_len, -1)
+        batch_size, seq_len, H, W, C = visual_lips.shape
+        visual_lips = visual_lips.permute(0, 1, 4, 2, 3)
+        visual_lips = visual_lips.reshape(-1, C, H, W)
+        visual_lips_out = self.visual_lips_cnn(visual_lips)
+        visual_lips_out = visual_lips_out.reshape(batch_size, seq_len, -1)
         
         # (Optionally) If the sequence length for visual lips should match that
         # of the other modalities, you might need further processing.
@@ -335,13 +335,13 @@ class ThreeStreamFusionEncoder(nn.Module):
 
         
         # Concatenate all modalities along the last dimension
-        combined_features = torch.cat([hand_shape_out, hand_pos_out, lips_out], dim=-1)
+        combined_features = torch.cat([hand_shape_out, hand_pos_out, lips_out, visual_lips_out], dim=-1)
         
         # Apply cross-modal attention
         attn_output, _ = self.cross_modal_attention(combined_features, combined_features, combined_features)
         
         # Fusion Conformer
-        fusion_out = self.fusion_gru(attn_output)
+        fusion_out, _ = self.fusion_gru(attn_output)
         return fusion_out
 
 
@@ -403,8 +403,8 @@ class JointCTCAttentionModel(nn.Module):
     def __init__(self, hand_shape_dim, hand_pos_dim, lips_dim, visual_lips_dim, output_dim, hidden_dim=128):
         super(JointCTCAttentionModel, self).__init__()
         self.encoder = ThreeStreamFusionEncoder(hand_shape_dim, hand_pos_dim, lips_dim, visual_lips_dim, hidden_dim)
-        self.attention_decoder = AttentionDecoder(encoder_dim=hidden_dim * 4, output_dim=output_dim)
-        self.ctc_fc = nn.Linear(hidden_dim * 4, output_dim)
+        self.attention_decoder = AttentionDecoder(encoder_dim=hidden_dim * 6, output_dim=output_dim)
+        self.ctc_fc = nn.Linear(hidden_dim * 6, output_dim)
     
     def forward(self, hand_shape, hand_pos, lips, visual_lips, target_seq=None):
         encoder_out = self.encoder(hand_shape, hand_pos, lips, visual_lips)
@@ -484,6 +484,13 @@ import time
 
 def train_model(model, train_loader, val_loader, optimizer, num_epochs, alpha, device):
     for epoch in range(num_epochs):
+        if epoch > 5000 and epoch <= 7000:
+            alpha = 0.5
+        elif epoch > 7000 and epoch <= 9000:
+            alpha = 0.3
+        else:
+            alpha = 0.2
+            
         epoch_start_time = time.time()
         model.train()
         epoch_loss = 0.0
@@ -884,7 +891,7 @@ if __name__ == "__main__":
     batch_size = 16
     hidden_dim_fusion = 128
     epochs = 5000
-    encoder_hidden_dim = 64
+    encoder_hidden_dim = 256
     output_dim = len(phoneme_to_index)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     level = "syllables"

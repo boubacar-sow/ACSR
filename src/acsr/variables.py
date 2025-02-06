@@ -44,3 +44,14 @@ HAND_CONNECTIONS = [
     (0, 17), (17, 18), (18, 19), (19, 20),# Pinky
     (5, 9), (9, 13), (13, 17)             # Palm connections
 ]
+
+HAND_ROTATIONS = {
+    1: 20,   # No rotation
+    2: 20,  # Rotate 30 degrees clockwise
+    3: 20,
+    4: 20,
+    5: 20,
+    6: 20,
+    7: 20,
+    8: 20 
+}
