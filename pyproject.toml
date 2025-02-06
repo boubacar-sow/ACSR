@@ -49,6 +49,7 @@ wandb = "^0.19.4"
 huggingface-hub = "^0.28.0"
 flashlight-text = "^0.0.7"
 kenlm = "^0.2.0"
+conformer = "^0.3.2"
 
 
 [tool.poetry.group.dev.dependencies]
