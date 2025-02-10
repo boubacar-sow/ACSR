@@ -146,7 +146,7 @@ def extract_coordinates(cap, fn_video, show_video=False, verbose=True):
     lip_indices = [17, 314, 405, 321, 375, 291, 84, 181, 91, 146, 
                    0, 267, 269, 270, 409, 40, 37, 39, 40, 185, 
                    61, 78, 95, 88, 87, 14, 317, 402, 324, 308, 
-                   80, 81, 82, 13, 312, 311, 319, 414, 308]  # 39 lip landmarks
+                   80, 81, 82, 13, 312, 311, 319, 308]  # 38 lip landmarks
     hand_indices = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]  # 21 hand landmarks
     face_indices = [454, 234, 200, 214, 50]  # Specific face landmarks
 
@@ -330,6 +330,12 @@ def extract_features(df_coords):
     # Lip opening/closing speed
     df_features["lip_opening_speed"] = df_features["lip_height"].diff()
 
+    # Lip protrusion (z-axis movement)
+    df_features["lip_protrusion"] = df_coords["lip_z0"] - df_coords["face_z234"]
+
+    # Vertical/horizontal lip dominance
+    df_features["lip_motion_ratio"] = df_features["lip_velocity_y"].abs() / (df_features["lip_velocity_x"].abs() + 1e-6)
+    
     # RELATIVE MOTION
     df_features["hand8_velocity_x"] = df_coords["hand_x8"].diff()
     df_features["hand8_velocity_y"] = df_coords["hand_y8"].diff()

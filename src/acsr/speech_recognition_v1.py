@@ -250,7 +250,6 @@ def map_syllable_to_cue(syllable):
             elif vowel[0] == "ɑ":
                 hand_position = vowel_positions.get("ɑ̃", 57)
             try:
-                print("Syllable error: ", syllable)
                 return hand_shape, hand_position
             except:
                 print("Syllable error: ", syllable)

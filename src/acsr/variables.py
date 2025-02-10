@@ -10,29 +10,29 @@ consonant_to_handshape = {
 # Define vowel positions relative to the nose (right side of the face/body)
 vowel_positions = {
     # Position -1: /a/, /o/, /œ/, /ə/
-    "a": -1,
-    "o": -1,
-    "œ": -1,
-    "ə": -1,
+    "a": 1,
+    "o": 1,
+    "œ": 1,
+    "ə": 1,
 
     # Position 50: /ɛ̃/, /ø/
-    "ɛ̃": 50,
-    "ø": 50,
+    "ɛ̃": 2,
+    "ø": 2,
 
     # Position 57: /i/, /ɔ̃/, /ɑ̃/
-    "i": 57,
-    "ɔ̃": 57,
-    "ɑ̃": 57,
+    "i": 3,
+    "ɔ̃": 3,
+    "ɑ̃": 3,
 
     # Position 175: /u/, /ɛ/, /ɔ/
-    "u": 175,
-    "ɛ": 175,
-    "ɔ": 175,
+    "u": 4,
+    "ɛ": 4,
+    "ɔ": 4,
 
     # Position -2: /œ̃/, /y/, /e/
-    "œ̃": -2,
-    "y": -2,
-    "e": -2,
+    "œ̃": 5,
+    "y": 5,
+    "e": 5,
 }
 
 # Define hand connections
@@ -54,4 +54,47 @@ HAND_ROTATIONS = {
     6: 20,
     7: 20,
     8: 20 
+}
+
+# Dictionary mapping consonants to handshape numbers, LIAPHON notation
+consonant_to_handshape = {
+    "b": 4, 
+    "d": 1, 
+    "f": 5, 
+    "g": 7, 
+    "h": 4, 
+    "j": 8, 
+    "k": 2, 
+    "l": 6, 
+    "m": 5, 
+    "n": 4, 
+    "p": 1, 
+    "r": 3, 
+    "s": 3, 
+    "s^": 6,
+    "t": 5, 
+    "v": 2, 
+    "w": 6, 
+    "z": 2, 
+    "z^": 1,
+    "ng": 6,
+    "gn": 8,
+}
+
+# Dictionary mapping vowels to position numbers
+vowel_to_position = {
+    "a": 1, 
+    "a~": 3,
+    "e": 5, 
+    "e^": 4,
+    "e~": 2,
+    "i": 3, 
+    "o": 4, 
+    "o^": 1,
+    "o~": 3,
+    "u": 4, 
+    "y": 5, 
+    "x": 1, 
+    "x^": 1,
+    "x~": 5,
 }

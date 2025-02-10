@@ -299,14 +299,14 @@ class ThreeStreamFusionEncoder(nn.Module):
         
         # CNN for visual lips (unchanged)
         self.visual_lips_cnn = nn.Sequential(
-            nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
             nn.AdaptiveAvgPool2d((1, hidden_dim)),  # (batch, 64, 1, 64)
             nn.Flatten(start_dim=1),                # (batch, 4096)
-            nn.Linear(64 * hidden_dim, hidden_dim)   # nn.Linear(4096, 64) if hidden_dim=64
+            nn.Linear(128 * hidden_dim, hidden_dim)   # nn.Linear(4096, 64) if hidden_dim=64
         )
 
         # Cross-modal attention and fusion conformer remain the same
@@ -338,10 +338,10 @@ class ThreeStreamFusionEncoder(nn.Module):
         combined_features = torch.cat([hand_shape_out, hand_pos_out, lips_out, visual_lips_out], dim=-1)
         
         # Apply cross-modal attention
-        attn_output, _ = self.cross_modal_attention(combined_features, combined_features, combined_features)
+        #attn_output, _ = self.cross_modal_attention(combined_features, combined_features, combined_features)
         
         # Fusion Conformer
-        fusion_out, _ = self.fusion_gru(attn_output)
+        fusion_out, _ = self.fusion_gru(combined_features)
         return fusion_out
 
 
@@ -890,8 +890,8 @@ if __name__ == "__main__":
     learning_rate = 1e-3
     batch_size = 16
     hidden_dim_fusion = 128
-    epochs = 5000
-    encoder_hidden_dim = 256
+    epochs = 100
+    encoder_hidden_dim = 128
     output_dim = len(phoneme_to_index)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     level = "syllables"
