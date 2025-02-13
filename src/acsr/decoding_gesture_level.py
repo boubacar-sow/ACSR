@@ -113,18 +113,18 @@ def prepare_data_for_videos_no_sliding_windows(base_names, phoneme_files, featur
             video_lips_dir = os.path.join(lips_dir, base_name, base_name)
             X_visual_lips = []
             
-            for frame_num in valid_frames:
-                img_path = os.path.join(video_lips_dir, f"{base_name}_lips_{frame_num-1:04d}.png")
-                if not os.path.exists(img_path):
-                    raise FileNotFoundError(f"Lip image not found: {img_path}")
-                
-                # Load and preprocess image
-                img = cv2.imread(img_path)
-                img = cv2.resize(img, img_size)
-                img = img.astype(np.float32) / 255.0  # Normalize to [0,1]
-                X_visual_lips.append(img)
-            
-            X_visual_lips = np.array(X_visual_lips)
+            #for frame_num in valid_frames:
+            #    img_path = os.path.join(video_lips_dir, f"{base_name}_lips_{frame_num-1:04d}.png")
+            #    if not os.path.exists(img_path):
+            #        raise FileNotFoundError(f"Lip image not found: {img_path}")
+            #    
+            #    # Load and preprocess image
+            #    img = cv2.imread(img_path)
+            #    img = cv2.resize(img, img_size)
+            #    img = img.astype(np.float32) / 255.0  # Normalize to [0,1]
+            #    X_visual_lips.append(img)
+            #
+            #X_visual_lips = np.array(X_visual_lips)
 
             # Separate features into different modalities
             hand_shape_columns = [col for col in features_df.columns if "hand" in col and "face" not in col]
@@ -157,7 +157,7 @@ def prepare_data_for_videos_no_sliding_windows(base_names, phoneme_files, featur
                 "X_acoustic_hand_shape": X_acoustic_hand_shape,
                 "X_acoustic_hand_pos": X_acoustic_hand_pos,
                 "X_acoustic_lips": X_acoustic_lips,
-                "X_visual_lips": X_visual_lips,  # New visual modality
+                "X_visual_lips": None,  # New visual modality
                 "y": syllable_indices,
             }
     
@@ -206,9 +206,9 @@ def train_val_split(data, train_ratio=0.9):
     X_acoustic_lips_val = X_acoustic_lips[split_idx:]
     
     # Split visual lip features
-    X_visual_lips = split_data('X_visual_lips')
-    X_visual_lips_train = X_visual_lips[:split_idx]
-    X_visual_lips_val = X_visual_lips[split_idx:]
+    #X_visual_lips = split_data('X_visual_lips')
+    #X_visual_lips_train = X_visual_lips[:split_idx]
+    #X_visual_lips_val = X_visual_lips[split_idx:]
     
     # Split labels
     y = split_data('y')
@@ -220,14 +220,14 @@ def train_val_split(data, train_ratio=0.9):
         'X_acoustic_hand_shape': X_acoustic_hand_shape_train,
         'X_acoustic_hand_pos': X_acoustic_hand_pos_train,
         'X_acoustic_lips': X_acoustic_lips_train,
-        'X_visual_lips': X_visual_lips_train,  # Include visual lips
+        'X_visual_lips': [],  # Include visual lips
         'y': y_train
     }
     val_data = {
         'X_acoustic_hand_shape': X_acoustic_hand_shape_val,
         'X_acoustic_hand_pos': X_acoustic_hand_pos_val,
         'X_acoustic_lips': X_acoustic_lips_val,
-        'X_visual_lips': X_visual_lips_val,  # Include visual lips
+        'X_visual_lips': [],  # Include visual lips
         'y': y_val
     }
     return train_data, val_data
@@ -241,7 +241,7 @@ import torch
 from torch.nn.utils.rnn import pad_sequence
 
 def custom_collate_fn(batch):
-    hand_shape, hand_pos, acoustic_lips, visual_lips, labels = zip(*batch)
+    hand_shape, hand_pos, acoustic_lips, labels = zip(*batch)
     
     # Pad sequences for hand shape, hand position, and acoustic lips
     hand_shape_padded = pad_sequence([torch.tensor(x, dtype=torch.float32) for x in hand_shape], batch_first=True, padding_value=0)
@@ -249,16 +249,16 @@ def custom_collate_fn(batch):
     acoustic_lips_padded = pad_sequence([torch.tensor(x, dtype=torch.float32) for x in acoustic_lips], batch_first=True, padding_value=0)
     
     # Pad visual lips (image sequences)
-    visual_lips_padded = pad_sequence(
-        [torch.tensor(x, dtype=torch.float32) for x in visual_lips],
-        batch_first=True,
-        padding_value=0  # Use zero-padding for images
-    )
+    #visual_lips_padded = pad_sequence(
+    #    [torch.tensor(x, dtype=torch.float32) for x in visual_lips],
+    #    batch_first=True,
+    #    padding_value=0  # Use zero-padding for images
+    #)
     
     # Pad labels
     labels_padded = pad_sequence([torch.tensor(y, dtype=torch.long) for y in labels], batch_first=True, padding_value=phoneme_to_index["<UNK>"])
     
-    return hand_shape_padded, hand_pos_padded, acoustic_lips_padded, visual_lips_padded, labels_padded
+    return hand_shape_padded, hand_pos_padded, acoustic_lips_padded, labels_padded
 
 from torch.utils.data import DataLoader
 
@@ -267,7 +267,7 @@ def data_to_dataloader(data, batch_size=4, shuffle=True):
         data['X_acoustic_hand_shape'],
         data['X_acoustic_hand_pos'],
         data['X_acoustic_lips'],
-        data['X_visual_lips'],  # Include visual lips
+        #data['X_visual_lips'],  # Include visual lips
         data['y']
     ))
     
@@ -437,17 +437,17 @@ def validate_model(model, val_loader, alpha, device):
     total_attn_loss = 0.0
 
     with torch.no_grad():
-        for batch_X_hand_shape, batch_X_hand_pos, batch_X_lips, batch_X_visual_lips, batch_y in val_loader:
+        for batch_X_hand_shape, batch_X_hand_pos, batch_X_lips, batch_y in val_loader:
             # Ensure batch_y is of type long
             batch_X_hand_shape = batch_X_hand_shape.to(device)
             batch_X_hand_pos = batch_X_hand_pos.to(device)
             batch_X_lips = batch_X_lips.to(device)
-            batch_X_visual_lips = batch_X_visual_lips.to(device)  # Visual lips
+            #batch_X_visual_lips = batch_X_visual_lips.to(device)  # Visual lips
             batch_y = batch_y.long().to(device)
             
             # Forward pass with teacher forcing
             ctc_logits, attn_logits = model(
-                batch_X_hand_shape, batch_X_hand_pos, batch_X_lips, batch_X_visual_lips, target_seq=batch_y
+                batch_X_hand_shape, batch_X_hand_pos, batch_X_lips, None, target_seq=batch_y
             )
             # Compute input_lengths and label_lengths
             input_lengths = torch.full(
@@ -475,30 +475,23 @@ import time
 
 def train_model(model, train_loader, val_loader, optimizer, num_epochs, alpha, device):
     for epoch in range(num_epochs):
-        if epoch > 5000 and epoch <= 7000:
-            alpha = 0.5
-        elif epoch > 7000 and epoch <= 9000:
-            alpha = 0.3
-        else:
-            alpha = 0.2
-            
         epoch_start_time = time.time()
         model.train()
         epoch_loss = 0.0
         epoch_ctc_loss = 0.0
         epoch_attn_loss = 0.0
         
-        for batch_X_hand_shape, batch_X_hand_pos, batch_X_lips, batch_X_visual_lips, batch_y in train_loader:
+        for batch_X_hand_shape, batch_X_hand_pos, batch_X_lips, batch_y in train_loader:
             # Convert targets to LongTensor and move data to device
             batch_X_hand_shape = batch_X_hand_shape.to(device)
             batch_X_hand_pos = batch_X_hand_pos.to(device)
             batch_X_lips = batch_X_lips.to(device)
-            batch_X_visual_lips = batch_X_visual_lips.to(device)  # Visual lips
+            #batch_X_visual_lips = batch_X_visual_lips.to(device)  # Visual lips
             batch_y = batch_y.long().to(device)
             
             # Forward pass with teacher forcing
             ctc_logits, attn_logits = model(
-                batch_X_hand_shape, batch_X_hand_pos, batch_X_lips, batch_X_visual_lips, target_seq=batch_y
+                batch_X_hand_shape, batch_X_hand_pos, batch_X_lips, None, target_seq=batch_y
             )
             
             # Compute input_lengths and label_lengths
@@ -553,24 +546,66 @@ def train_model(model, train_loader, val_loader, optimizer, num_epochs, alpha, d
     
     print("Training complete.")
 
-
-def greedy_decoder(output, blank):
-    arg_maxes = torch.argmax(output, dim=2)  # Get the most likely class for each time step
-    decodes = []
-    for args in arg_maxes:
-        args = torch.unique_consecutive(args)  # Remove consecutive repeated indices
-        decode = []
-        for index in args:
-            if index != blank:
-                decode.append(index.item())  # Append non-blank and non-repeated tokens
-        decodes.append(decode)
-    return decodes
-
-import math
-
-def logsumexp(a, b):
-    # Combine two log values in a numerically stable manner using torch.logaddexp.
-    return torch.logaddexp(torch.tensor(a), torch.tensor(b)).item()
+def syllables_to_gestures(syllable_sequence):
+    """
+    Convert a sequence of syllables into a sequence of gestures.
+    
+    Args:
+        syllable_sequence (list): A list of syllables (strings).
+        
+    Returns:
+        list: A list of gesture strings in the format "handshape-position".
+    """
+    gestures = []
+    for syllable in syllable_sequence:
+        if syllable == "<SOS>" or syllable == "<EOS>" or syllable == "<PAD>" or syllable == "<UNK>":
+            gestures.append(syllable)
+        # Check if the syllable starts with a multi-character consonant (e.g., "s^")
+        elif len(syllable) >= 3 and syllable[:2] in consonant_to_handshape:
+            consonant = syllable[:2]
+            vowel = syllable[2:]  # Remaining part is the vowel
+            handshape = consonant_to_handshape.get(consonant, 5)  # Default handshape is 5
+            position = vowel_to_position.get(vowel, 1)  # Default position is 1
+            gestures.append(f"{handshape}-{position}")
+        # Check if the syllable ends with a multi-character vowel (e.g., "me^")
+        elif len(syllable) >= 3 and syllable[-2:] in vowel_to_position:
+            consonant = syllable[:-2]  # Remaining part is the consonant
+            vowel = syllable[-2:]
+            handshape = consonant_to_handshape.get(consonant, 5)  # Default handshape is 5
+            position = vowel_to_position.get(vowel, 1)  # Default position is 1
+            gestures.append(f"{handshape}-{position}")
+        # Handle normal CV syllables (e.g., "ma")
+        elif len(syllable) == 2:
+            if syllable in consonant_to_handshape:  # length 2 consonant only syllable
+                handshape = consonant_to_handshape.get(syllable, 5)  # Default handshape is 5
+                position = 1  # Default position is 1
+                gestures.append(f"{handshape}-{position}")
+            elif syllable in vowel_to_position:  # length 2 vowel only syllable
+                handshape = 5  # Default handshape is 5
+                position = vowel_to_position.get(syllable, 1)
+                gestures.append(f"{handshape}-{position}")
+            elif syllable[0] in consonant_to_handshape:  # Consonant-Vowel pair
+                consonant = syllable[0]
+                vowel = syllable[1]
+                handshape = consonant_to_handshape.get(consonant, 5)  # Default handshape is 5
+                position = vowel_to_position.get(vowel, 1)  # Default position is 1
+                gestures.append(f"{handshape}-{position}")
+            elif syllable[0] in vowel_to_position:  # Vowel-only syllable
+                vowel = syllable
+                position = vowel_to_position.get(vowel, 1)  # Default position is 1
+                gestures.append(f"5-{position}")  # Default handshape is 5
+        # Handle C-only syllables (e.g., "m")
+        elif len(syllable) == 1 and syllable in consonant_to_handshape:
+            handshape = consonant_to_handshape.get(syllable, 5)  # Default handshape is 5
+            gestures.append(f"{handshape}-1")  # Default position is 1
+        # Handle V-only syllables (e.g., "a")
+        elif len(syllable) == 1 and syllable in vowel_to_position:
+            position = vowel_to_position.get(syllable, 1)  # Default position is 1
+            gestures.append(f"5-{position}")  # Default handshape is 5
+        else:
+            # Unknown syllable
+            print(f"Unknown syllable: {syllable}")
+    return gestures
 import torch
 import torch.nn.functional as F
 
@@ -747,118 +782,136 @@ def decode_loader_beam(cuedspeech_model, nextsyllable_model, loader, blank, inde
                 all_true_sequences.append(seq_syllables)
     return all_decoded_sequences, all_true_sequences
 
-
-def remove_blanks(seq, blank_idx):
-    """Remove blank tokens from a candidate sequence (list of indices)."""
-    return [s for s in seq if s != blank_idx]
-
-def syllables_to_gestures(syllable_sequence):
-    """
-    Convert a sequence of syllables into a sequence of gestures.
+def greedy_decoder(output, blank, index_to_phoneme):
+    probs = F.softmax(output, dim=-1)
+    arg_maxes = torch.argmax(probs, dim=2)
+    top10_probs, top10_indices = torch.topk(probs, k=10, dim=-1)
     
-    Args:
-        syllable_sequence (list): A list of syllables (strings).
+    raw_decodes = []
+    collapsed_decodes = []
+    
+    batch_size, time_steps = arg_maxes.shape
+    for batch_idx in range(batch_size):
+        raw_seq = []
+        collapsed_seq = []
+        current_candidate = None  # (token, max_prob, raw_info)
         
-    Returns:
-        list: A list of gesture strings in the format "handshape-position".
-    """
-    gestures = []
-    for syllable in syllable_sequence:
-        if syllable == "<SOS>" or syllable == "<EOS>" or syllable == "<PAD>" or syllable == "<UNK>":
-            gestures.append(syllable)
-        # Check if the syllable starts with a multi-character consonant (e.g., "s^")
-        elif len(syllable) >= 3 and syllable[:2] in consonant_to_handshape:
-            consonant = syllable[:2]
-            vowel = syllable[2:]  # Remaining part is the vowel
-            handshape = consonant_to_handshape.get(consonant, 5)  # Default handshape is 5
-            position = vowel_to_position.get(vowel, 1)  # Default position is 1
-            gestures.append(f"{handshape}-{position}")
-        # Check if the syllable ends with a multi-character vowel (e.g., "me^")
-        elif len(syllable) >= 3 and syllable[-2:] in vowel_to_position:
-            consonant = syllable[:-2]  # Remaining part is the consonant
-            vowel = syllable[-2:]
-            handshape = consonant_to_handshape.get(consonant, 5)  # Default handshape is 5
-            position = vowel_to_position.get(vowel, 1)  # Default position is 1
-            gestures.append(f"{handshape}-{position}")
-        # Handle normal CV syllables (e.g., "ma")
-        elif len(syllable) == 2:
-            if syllable in consonant_to_handshape:  # length 2 consonant only syllable
-                handshape = consonant_to_handshape.get(syllable, 5)  # Default handshape is 5
-                position = 1  # Default position is 1
-                gestures.append(f"{handshape}-{position}")
-            elif syllable in vowel_to_position:  # length 2 vowel only syllable
-                handshape = 5  # Default handshape is 5
-                position = vowel_to_position.get(syllable, 1)
-                gestures.append(f"{handshape}-{position}")
-            elif syllable[0] in consonant_to_handshape:  # Consonant-Vowel pair
-                consonant = syllable[0]
-                vowel = syllable[1]
-                handshape = consonant_to_handshape.get(consonant, 5)  # Default handshape is 5
-                position = vowel_to_position.get(vowel, 1)  # Default position is 1
-                gestures.append(f"{handshape}-{position}")
-            elif syllable[0] in vowel_to_position:  # Vowel-only syllable
-                vowel = syllable
-                position = vowel_to_position.get(vowel, 1)  # Default position is 1
-                gestures.append(f"5-{position}")  # Default handshape is 5
-        # Handle C-only syllables (e.g., "m")
-        elif len(syllable) == 1 and syllable in consonant_to_handshape:
-            handshape = consonant_to_handshape.get(syllable, 5)  # Default handshape is 5
-            gestures.append(f"{handshape}-1")  # Default position is 1
-        # Handle V-only syllables (e.g., "a")
-        elif len(syllable) == 1 and syllable in vowel_to_position:
-            position = vowel_to_position.get(syllable, 1)  # Default position is 1
-            gestures.append(f"5-{position}")  # Default handshape is 5
-        else:
-            # Unknown syllable
-            print(f"Unknown syllable: {syllable}")
-    return gestures
+        for t in range(time_steps):
+            current_index = arg_maxes[batch_idx, t].item()
+            token_prob = probs[batch_idx, t, current_index].item()
+            current_token = index_to_phoneme.get(current_index, "<UNK>")
+            
+            # Build raw info
+            raw_info = {
+                "token": current_token,
+                "prob": token_prob,
+                "top2_token": index_to_phoneme.get(top10_indices[batch_idx, t, 1].item(), "<UNK>"),
+                "top2_prob": top10_probs[batch_idx, t, 1].item(),
+                "top3_token": index_to_phoneme.get(top10_indices[batch_idx, t, 2].item(), "<UNK>"),
+                "top3_prob": top10_probs[batch_idx, t, 2].item(),
+                "top4_token": index_to_phoneme.get(top10_indices[batch_idx, t, 3].item(), "<UNK>"),
+                "top4_prob": top10_probs[batch_idx, t, 3].item(),
+                "top5_token": index_to_phoneme.get(top10_indices[batch_idx, t, 4].item(), "<UNK>"),
+                "top5_prob": top10_probs[batch_idx, t, 4].item(),
+                "top6_token": index_to_phoneme.get(top10_indices[batch_idx, t, 5].item(), "<UNK>"),
+                "top6_prob": top10_probs[batch_idx, t, 5].item(),
+                "top7_token": index_to_phoneme.get(top10_indices[batch_idx, t, 6].item(), "<UNK>"),
+                "top7_prob": top10_probs[batch_idx, t, 6].item(),
+                "top8_token": index_to_phoneme.get(top10_indices[batch_idx, t, 7].item(), "<UNK>"),
+                "top8_prob": top10_probs[batch_idx, t, 7].item(),
+                "timestep": t
+            }
+            if raw_info["token"] == "<UNK>" and raw_info["prob"] < 0.98: # if the model is not confident about the prediction of the blank token
+                raw_info["token"], raw_info["top2_token"] = raw_info["top2_token"], raw_info["token"]
+                raw_info["prob"], raw_info["top2_prob"] = raw_info["top2_prob"], raw_info["prob"]
+            raw_seq.append(raw_info)
+            
+            # Collapse logic
+            if current_index == blank:
+                if current_candidate:
+                    collapsed_seq.append(current_candidate["raw_info"])
+                    current_candidate = None
+                continue
+                
+            if current_candidate:
+                if current_token == current_candidate["token"]:
+                    # Keep the highest probability occurrence
+                    if token_prob > current_candidate["max_prob"]:
+                        current_candidate = {
+                            "token": current_token,
+                            "max_prob": token_prob,
+                            "raw_info": raw_info
+                        }
+                else:
+                    # Finalize previous candidate
+                    collapsed_seq.append(current_candidate["raw_info"])
+                    current_candidate = {
+                        "token": current_token,
+                        "max_prob": token_prob,
+                        "raw_info": raw_info
+                    }
+            else:
+                current_candidate = {
+                    "token": current_token,
+                    "max_prob": token_prob,
+                    "raw_info": raw_info
+                }
+        
+        # Add final candidate if exists
+        if current_candidate:
+            collapsed_seq.append(current_candidate["raw_info"])
+        
+        raw_decodes.append(raw_seq)
+        collapsed_decodes.append(collapsed_seq)
+    
+    return raw_decodes, collapsed_decodes
 
-def decode_loader(model, loader, blank, index_to_phoneme, device='cuda'):
+def decode_loader(model, loader, blank, index_to_phoneme, device='cuda', training=False):
     """
     Decode sequences from a DataLoader using the CTC branch of the joint model.
+    This function now obtains two outputs from greedy_decoder: the raw per-timestep
+    top-5 tokens (including blanks) and the collapsed (final) predictions.
     
     Args:
-        model: The JointCTCAttentionModel.
-        loader: DataLoader that yields (hand_shape, hand_pos, lips, batch_y).
-        blank: The blank token index used by CTC.
-        index_to_phoneme: Dictionary mapping indices to phoneme strings.
-        device: The torch device (e.g., 'cuda' or 'cpu').
+        model: The joint model.
+        loader: DataLoader yielding batches.
+        blank (int): The blank token index.
+        index_to_phoneme (dict): Mapping from indices to phonemes.
+        device (str): e.g., 'cuda' or 'cpu'.
+        training (bool): If False, prints the decoded outputs.
     
     Returns:
-        A tuple (all_decoded_sequences, all_true_sequences).
+        tuple: (all_collapsed_tokens, all_true_sequences, all_decoded_gestures, all_true_gestures)
+               where all_collapsed_tokens is the list of collapsed decoded sequences.
     """
-    model.eval()  # Set the model to evaluation mode
-    all_decoded_sequences = []
+    model.eval()
+    all_raw_decoded_sequences = []       # To store raw top-5 info per timestep
+    all_collapsed_decoded_sequences = [] # To store final collapsed sequences
     all_true_sequences = []
-
-    all_true_gestures = []
     all_decoded_gestures = []
-
-    with torch.no_grad():  # Disable gradient computation
-        for batch_X_hand_shape, batch_X_hand_pos, batch_X_lips, batch_X_visual_lips, batch_y in loader:
-            # Move data to device
+    all_true_gestures = []
+    
+    with torch.no_grad():
+        for batch_X_hand_shape, batch_X_hand_pos, batch_X_lips, batch_y in loader:
             batch_X_hand_shape = batch_X_hand_shape.to(device)
             batch_X_hand_pos = batch_X_hand_pos.to(device)
             batch_X_lips = batch_X_lips.to(device)
-            batch_X_visual_lips = batch_X_visual_lips.to(device)
             batch_y = batch_y.to(device)
             
-            # Forward pass through the model (without teacher forcing)
-            # This returns (ctc_logits, attn_logits); we use the CTC branch for decoding.
-            ctc_logits, _ = model(batch_X_hand_shape, batch_X_hand_pos, batch_X_lips, batch_X_visual_lips)
+            ctc_logits, _ = model(batch_X_hand_shape, batch_X_hand_pos, batch_X_lips, None)
+            raw_decodes, collapsed_decodes = greedy_decoder(ctc_logits, blank=blank, 
+                                                              index_to_phoneme=index_to_phoneme)
             
-            # Use your greedy_decoder on the CTC logits.
-            # Ensure that greedy_decoder expects logits of shape (batch, time, num_classes)
-            decoded_phoneme_sequences = greedy_decoder(ctc_logits, blank=blank)
-            decoded_phonemes = [
-                [index_to_phoneme[idx] for idx in sequence] 
-                for sequence in decoded_phoneme_sequences
-            ]
+            # Use the collapsed output for further processing.
+            decoded_phonemes = [[token_info["token"] for token_info in seq] 
+                                for seq in collapsed_decodes]
             decoded_gestures = [syllables_to_gestures(seq) for seq in decoded_phonemes]
+            
+            all_raw_decoded_sequences.extend(raw_decodes)
+            all_collapsed_decoded_sequences.extend(collapsed_decodes)
             all_decoded_gestures.extend(decoded_gestures)
-            all_decoded_sequences.extend(decoded_phonemes)
-
-            # Convert true labels (batch_y) to phoneme sequences.
+            
+            # Process true labels
             true_phoneme_sequences = []
             for sequence in batch_y:
                 seq_phonemes = [
@@ -867,15 +920,187 @@ def decode_loader(model, loader, blank, index_to_phoneme, device='cuda'):
                     if idx != blank and index_to_phoneme[idx.item()] != " "
                 ]
                 true_phoneme_sequences.append(seq_phonemes)
-            all_true_gestures.extend([syllables_to_gestures(seq) for seq in true_phoneme_sequences])
             all_true_sequences.extend(true_phoneme_sequences)
-    #print("Decoded gestures:", all_decoded_gestures[:3])
-    #print("True gestures:", all_true_gestures[:3])
-#
-    #print("Decoded phonemes:", all_decoded_sequences[:3])
-    #print("True phonemes:", all_true_sequences[:3])
-    return all_decoded_sequences, all_true_sequences, all_true_gestures, all_decoded_gestures
+            all_true_gestures.extend([syllables_to_gestures(seq) for seq in true_phoneme_sequences])
+    
+    # If not in training mode, print out the raw (per-timestep) top-5 information for a few samples.
+    if not training:
+        output_file = "/scratch2/bsow/Documents/ACSR/src/acsr/rescored_candidates.txt"
+        # Open the file in write mode (this will overwrite it) or use "a" for appending.
+        with open(output_file, "w") as f:
+            print("Raw decoded sequences (per timestep top-5 tokens, including blanks):", file=f)
+            for i, raw_seq in enumerate(all_raw_decoded_sequences[:15]):
+                print(f"Sample {i}:", file=f)
+                for t, token_info in enumerate(raw_seq):
+                    print(f"  Timestep {t}: {token_info}", file=f)
 
+        print("\nCollapsed decoded syllable sequences:")
+        for i, collapsed_seq in enumerate(all_collapsed_decoded_sequences[-5:]):
+            print(f"Sample {i}: {[token_info['token'] for token_info in collapsed_seq]}")
+        
+        print("\nDecoded validation gesture sequences:")
+        for i, gesture_seq in enumerate(all_decoded_gestures[-5:]):
+            print(f"Sample {i}: {gesture_seq}")
+    
+    # For evaluation, we return only the collapsed tokens.
+    all_collapsed_tokens = [[token_info["token"] for token_info in seq] 
+                            for seq in all_collapsed_decoded_sequences]
+    
+    return all_collapsed_tokens, all_true_sequences, all_decoded_gestures, all_true_gestures
+
+import itertools
+
+import itertools
+import torch
+import torch.nn.functional as F
+import sys
+import gc
+
+def rescore_sequences(collapsed_decodes, raw_decodes, true_sequences, phoneme_to_index, nextsyllable_model, device, threshold=0.8, top_k=6, batch_size=10000):
+    sos_idx = phoneme_to_index["<SOS>"]
+    pad_idx = phoneme_to_index["<PAD>"]
+    max_seq_len = 15
+    nextsyllable_model.eval()
+    all_rescored_sequences = []
+    
+    for sample_idx, (collapsed_seq, raw_seq, true_seq) in enumerate(zip(collapsed_decodes, raw_decodes, true_sequences)):
+        alternatives = []
+        for token_info in collapsed_seq:
+            if token_info['prob'] < threshold:
+                t = token_info['timestep']
+                raw_token_info = raw_seq[t]
+                topk_tokens = [raw_token_info["token"]]
+                for i in range(2, top_k + 1):
+                    topk_token = raw_token_info.get(f'top{i}_token', "<UNK>")
+                    topk_tokens.append(topk_token)
+                alternatives.append(topk_tokens[:top_k])
+            else:
+                alternatives.append([token_info['token']])
+        
+        candidate_sequences = list(itertools.product(*alternatives))
+        # remove <UNK> tokens in the candidate for each candidate sequence
+        candidate_sequences = [[token for token in candidate if token != "<UNK>"] for candidate in candidate_sequences]
+        print(f"Sample {sample_idx}, {len(candidate_sequences)} candidate sequences.")
+        sys.stdout.flush()
+        if not candidate_sequences:
+            best_sequence = [token_info['token'] for token_info in collapsed_seq]
+            all_rescored_sequences.append(best_sequence)
+            continue
+
+        # Convert candidates to indices and track original lengths
+        candidate_indices_list = []
+        original_lengths = []  # Track actual sequence lengths
+        for candidate in candidate_sequences:
+            indices = []
+            for token in candidate:
+                if token in phoneme_to_index:
+                    indices.append(phoneme_to_index[token])
+                else:
+                    indices.append(phoneme_to_index.get("<UNK>", pad_idx))
+            original_lengths.append(len(indices))  # Record original length
+            candidate_indices_list.append(indices)
+
+        # Pad sequences to maximum length in this sample
+        max_L = max(original_lengths)
+        padded_candidates = []
+        for seq in candidate_indices_list:
+            if len(seq) < max_L:
+                padded_seq = seq + [pad_idx] * (max_L - len(seq))
+            else:
+                padded_seq = seq
+            padded_candidates.append(padded_seq)
+
+        # Process in batches
+        lm_scores = torch.zeros(len(candidate_sequences), device=device)
+
+        for batch_start in range(0, len(candidate_sequences), batch_size):
+            batch_end = min(batch_start + batch_size, len(candidate_sequences))
+            batch_candidates = torch.tensor(padded_candidates[batch_start:batch_end], device=device, dtype=torch.long)
+            batch_lengths = torch.tensor(original_lengths[batch_start:batch_end], device=device)
+
+            for i in range(1, max_L):
+                # Mask to ignore sequences where i >= actual length
+                valid_mask = (i < batch_lengths).float()  # 1.0 if valid, else 0.0
+
+                # Extract prefixes (includes padding but will be masked)
+                prefixes = batch_candidates[:, :i]
+
+                # Pad/truncate to max_seq_len for model input
+                if i < max_seq_len:
+                    pad = torch.full((batch_candidates.size(0), max_seq_len - i), pad_idx, device=device, dtype=torch.long)
+                    padded_prefixes = torch.cat([pad, prefixes], dim=1)
+                elif i > max_seq_len:
+                    padded_prefixes = prefixes[:, (i - max_seq_len):i]
+                else:
+                    padded_prefixes = prefixes
+
+                # Get model predictions
+                with torch.no_grad():
+                    lm_logits = nextsyllable_model(padded_prefixes)
+                torch.cuda.empty_cache()
+                gc.collect()
+                lm_log_probs = F.log_softmax(lm_logits, dim=-1)
+
+                # Get targets and compute log probs
+                targets = batch_candidates[:, i]
+                selected_log_probs = lm_log_probs.gather(1, targets.unsqueeze(1)).squeeze(1)
+
+                # Apply mask to ignore invalid positions (i >= sequence length)
+                selected_log_probs *= valid_mask
+
+                # Accumulate scores
+                lm_scores[batch_start:batch_end] += selected_log_probs
+
+        # Find best sequence
+        best_idx = torch.argmax(lm_scores).item()
+        best_sequence = candidate_sequences[best_idx]
+        all_rescored_sequences.append(list(best_sequence))
+        print("Best sequence: ", best_sequence)
+        print("Original sequ: ", [token_info["token"] for token_info in collapsed_seq])
+        print("True sequence: ", true_seq)
+        print()
+        sys.stdout.flush()
+    
+    return all_rescored_sequences
+
+# decode_loader_with_rescoring remains unchanged
+
+def decode_loader_with_rescoring(model, nextsyllable_model, loader, blank, index_to_phoneme, phoneme_to_index, device='cuda'):
+    model.eval()
+    raw_decodes_all = []
+    collapsed_decodes_all = []
+    true_sequences = []
+    
+    with torch.no_grad():
+        for batch_X_hand_shape, batch_X_hand_pos, batch_X_lips, batch_y in loader:
+            # ... [same as original decode_loader] ...
+            batch_X_hand_shape = batch_X_hand_shape.to(device)
+            batch_X_hand_pos = batch_X_hand_pos.to(device)
+            batch_X_lips = batch_X_lips.to(device)
+            batch_y = batch_y.to(device)
+            ctc_logits, _ = model(batch_X_hand_shape, batch_X_hand_pos, batch_X_lips, None)
+            raw_decodes, collapsed_decodes = greedy_decoder(ctc_logits, blank, index_to_phoneme)
+            
+            raw_decodes_all.extend(raw_decodes)
+            collapsed_decodes_all.extend(collapsed_decodes)
+            # Process true labels
+            true_phoneme_sequences = []
+            for sequence in batch_y:
+                seq_phonemes = [
+                    index_to_phoneme[idx.item()]
+                    for idx in sequence 
+                    if idx != blank and index_to_phoneme[idx.item()] != " "
+                ]
+                true_phoneme_sequences.append(seq_phonemes)
+            true_sequences.extend(true_phoneme_sequences)
+    
+    # Rescore sequences
+    rescored_sequences = rescore_sequences(
+        collapsed_decodes_all, raw_decodes_all, true_sequences,
+        phoneme_to_index, nextsyllable_model, device
+    )
+    
+    return rescored_sequences, true_sequences
 
 def calculate_per_with_jiwer(decoded_sequences, true_sequences):
     # Convert phoneme sequences to space-separated strings
@@ -939,19 +1164,19 @@ if __name__ == "__main__":
     print("Len of val dataset", len(val_data['X_acoustic_hand_shape']))
 
     # Check the DataLoader output
-    for batch_X_acoustic_hand_shape, batch_X_acoustic_hand_pos, batch_X_acoustic_lips, batch_X_visual_lips, batch_y in train_loader:
+    for batch_X_acoustic_hand_shape, batch_X_acoustic_hand_pos, batch_X_acoustic_lips, batch_y in train_loader:
         print("Batch X_acoustic_hand_shape shape:", batch_X_acoustic_hand_shape.shape)
         print("Batch X_acoustic_hand_pos shape:", batch_X_acoustic_hand_pos.shape)
         print("Batch X_acoustic_lips shape:", batch_X_acoustic_lips.shape)
-        print("Batch X_visual_lips shape:", batch_X_visual_lips.shape)
+        #print("Batch X_visual_lips shape:", batch_X_visual_lips.shape)
         #print("Batch X_teacher shape:", batch_X_teacher.shape)
         print("Batch y shape:", batch_y.shape)
         print("Output dim of the model: ", len(phoneme_to_index))
         break
 
     learning_rate = 1e-3
-    batch_size = 16
-    hidden_dim_fusion = 128
+    batch_size = 64
+    hidden_dim_fusion = 256
     epochs = 5000
     encoder_hidden_dim = 128
     output_dim = len(phoneme_to_index)
@@ -961,64 +1186,63 @@ if __name__ == "__main__":
     alpha = 0.2
     wandb.login(key="580ab03d7111ed25410f9831b06b544b5f5178a2")
     # Initialize W&B
-    wandb.init(project="acsr", config={
-        "learning_rate": learning_rate,
-        "batch_size": batch_size,
-        "epochs": epochs,
-        "encoder_hidden_dim": encoder_hidden_dim,
-        "output_dim": output_dim,
-        "n_layers_gru": n_layers_gru,
-        "alpha": alpha,
-        "device": device,
-        "level": level,
-    })
+    #wandb.init(project="acsr", config={
+    #    "learning_rate": learning_rate,
+    #    "batch_size": batch_size,
+    #    "epochs": epochs,
+    #    "encoder_hidden_dim": encoder_hidden_dim,
+    #    "output_dim": output_dim,
+    #    "n_layers_gru": n_layers_gru,
+    #    "alpha": alpha,
+    #    "device": device,
+    #    "level": level,
+    #})
 
     # Define the model
     acoustic_model = JointCTCAttentionModel(
         hand_shape_dim=batch_X_acoustic_hand_shape.shape[-1],  # Number of hand shape keypoints
         hand_pos_dim=batch_X_acoustic_hand_pos.shape[-1],      # Number of hand position keypoints
         lips_dim=batch_X_acoustic_lips.shape[-1],              # Number of lip keypoints
-        visual_lips_dim=batch_X_visual_lips.shape[-1],        # Number of visual lip keypoints
+        visual_lips_dim=None,        # Number of visual lip keypoints
         output_dim=output_dim,  # Number of phonemes
         hidden_dim=encoder_hidden_dim,  # Hidden dimension for GRUs
     )
 
     # Optimizer
-    optimizer = Adam(acoustic_model.parameters(), lr=1e-3, weight_decay=1e-5)
+    optimizer = Adam(acoustic_model.parameters(), lr=learning_rate, weight_decay=1e-5)
     # Device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    
     print("Training on device:", device)
     acoustic_model.to(device)
     # load the trained acoustic model
-    #acoustic_model.load_state_dict(torch.load("/scratch2/bsow/Documents/ACSR/src/acsr/model_epoch2.pt", map_location=torch.device('cpu')))
+    acoustic_model.load_state_dict(torch.load("/scratch2/bsow/Documents/ACSR/src/acsr/best_model.pt", map_location=device))
     acoustic_model.to(device)
     
     # Start training
-    train_model(acoustic_model, train_loader, val_loader, num_epochs=epochs, alpha=alpha, device=device, optimizer=optimizer)
-    torch.save(acoustic_model.state_dict(), "/scratch2/bsow/Documents/ACSR/output/saved_models/model_epoch3.pth")
+    #train_model(acoustic_model, train_loader, val_loader, num_epochs=epochs, alpha=alpha, device=device, optimizer=optimizer)
+    #torch.save(acoustic_model.state_dict(), "/scratch2/bsow/Documents/ACSR/output/saved_models/model_epoch3.pth")
 
 
     blank_token =  phoneme_to_index["<UNK>"]
-    decoded_train_sequences, true_train_sequences, true_train_gestures, decoded_train_gestures = decode_loader(acoustic_model, train_loader, blank_token, index_to_phoneme, device)
-    decoded_val_sequences, true_val_sequences, true_val_gestures, decoded_val_gestures = decode_loader(acoustic_model, val_loader, blank_token, index_to_phoneme, device)
+    decoded_train_sequences, true_train_sequences, true_train_gestures, decoded_train_gestures = decode_loader(acoustic_model, train_loader, blank_token, index_to_phoneme, device, training=True)
+    decoded_val_sequences, true_val_sequences, decoded_val_gestures, true_val_gestures = decode_loader(acoustic_model, val_loader, blank_token, index_to_phoneme, device, training=False)
 
     # Print results
     #print("Decoded training phoneme sequences:", decoded_train_sequences[:5])
     #print("True training phoneme sequences:", true_train_sequences[:5])
-    print("Decoded validation phoneme sequences:", decoded_val_sequences)
-    print("True validation phoneme sequences:", true_val_sequences)
+    print("Decoded validation phoneme sequences:", decoded_val_sequences[:5])
+    print("True validation phoneme sequences:", true_val_sequences[:5])
     sys.stdout.flush()
     train_per = calculate_per_with_jiwer(decoded_train_sequences, true_train_sequences)
     val_per = calculate_per_with_jiwer(decoded_val_sequences, true_val_sequences)
     print("Training PER (jiwer):", train_per, "1 - PER: ", 1 - train_per)
     print("Validation PER (jiwer):", val_per, "1 - PER: ", 1 - val_per)
 
-    print("Decoded training gesture sequences:", decoded_train_gestures[:5])
-    print("True training gesture sequences:", true_train_gestures[:5])
-    print("Decoded validation gesture sequences:", decoded_val_gestures)
-    print("True validation gesture sequences:", true_val_gestures)
+    #print("Decoded training gesture sequences:", decoded_train_gestures[:5])
+    #print("True training gesture sequences:", true_train_gestures[:5])
+    print("Decoded validation gesture sequences:", decoded_val_gestures[-5:])
+    print("True validation gesture sequences:", true_val_gestures[-5:])
 
     # Calculate PER for gestures
     train_per_gestures = calculate_per_with_jiwer(decoded_train_gestures, true_train_gestures)
@@ -1027,61 +1251,37 @@ if __name__ == "__main__":
     print("Validation PER (jiwer) for gestures:", val_per_gestures, "1 - PER: ", 1 - val_per_gestures)
     sys.stdout.flush()
     
-    # Save the trained acoustic model
-    print("Acoustic model saved.")
     print("="*210)
-    # Log the model as a W&B artifact
-    #model_artifact = wandb.Artifact("acoustic_model", type="model")
-    #model_artifact.add_file("/scratch2/bsow/Documents/ACSR/output/saved_models/acoustic_model.pth")
-    #wandb.log_artifact(model_artifact)
 
     # Initialize model
-    #nextsyllable_model = NextSyllableLSTM(
-    #    vocab_size=len(phoneme_to_index),
-    #    embedding_dim=200,
-    #    hidden_dim=512,
-    #    num_layers=4,
-    #    dropout=0.2
-    #).to(device)
+    nextsyllable_model = NextSyllableLSTM(
+        vocab_size=len(phoneme_to_index),
+        embedding_dim=200,
+        hidden_dim=512,
+        num_layers=4,
+        dropout=0.2
+    ).to(device)
 ####
-    ## Load model weights
-    #nextsyllable_model.load_state_dict(torch.load("/scratch2/bsow/Documents/ACSR/src/acsr/wandb/run-20250131_113223-rge6w8nh/files/best_syllable_model_def2.pth", map_location=torch.device('cpu')))
-    ## Ensure both models are on the same device
-    #nextsyllable_model.to(device)
-    #nextsyllable_model.eval()
-    ##
-    ## After training your models, perform decoding
-    #blank_token = phoneme_to_index["<UNK>"]
-    #beam_width = 15
-    #alpha = 0.5  # Adjust alpha to balance between models
-    
-    #decoded_val_sequences, true_val_sequences = decode_loader_beam(
-    #    acoustic_model, nextsyllable_model, val_loader,
-    #    blank_token, index_to_phoneme, beam_width=beam_width, alpha=alpha, device=device
-    #)
-#
-    #print("Decoded validation syllable sequences:", decoded_val_sequences)
-    #print("True validation syllable sequences:", true_val_sequences)
-    #sys.stdout.flush()
-#
-    ## One sample beam decoding
-    #test_sample = val_data["X_acoustic_hand_shape"][-2:-1], val_data["X_acoustic_hand_pos"][-2:-1], val_data["X_acoustic_lips"][-2:-1], val_data["y"][-2:-1]
-    #test_sample_loader = data_to_dataloader({"X_acoustic_hand_shape": test_sample[0], "X_acoustic_hand_pos": test_sample[1], "X_acoustic_lips": test_sample[2], "y": test_sample[3]}, batch_size=1, shuffle=False)
-    #decoded_sample, true_sample = decode_loader_beam(
-    #    acoustic_model, nextsyllable_model, test_sample_loader,
-    #    blank_token, index_to_phoneme, beam_width=beam_width, alpha=alpha, device=device, test=False
-    #)
-    #print("Decoded sample syllable sequence:", decoded_sample)
-    #print("True sample syllable sequence:", true_sample)
+    # Load model weights
+    nextsyllable_model.load_state_dict(torch.load("/scratch2/bsow/Documents/ACSR/src/acsr/wandb/run-20250131_113223-rge6w8nh/files/best_syllable_model_def2.pth", map_location=device))
+    # Ensure both models are on the same device
+    nextsyllable_model.to(device)
+    nextsyllable_model.eval()
+    #
+    # After training your models, perform decoding
+    blank_token = phoneme_to_index["<UNK>"]
+    beam_width = 15
+    alpha = 0.5  # Adjust alpha to balance between models
+    decoded_val_sequences
 
-##
-    # Evaluate performance
-    #train_per_beam = calculate_per_with_jiwer(decoded_train_sequences, true_train_sequences)
-    #val_per_beam = calculate_per_with_jiwer(decoded_val_sequences, true_val_sequences)
-    #print("Training PER (jiwer) after combining models:", train_per_beam, "1 - PER: ", 1 - train_per_beam)
-    #print("Validation PER (jiwer) after combining models:", val_per_beam, "1 - PER: ", 1 - val_per_beam)
+    # Rescored decoding
+    rescored_sequences, _ = decode_loader_with_rescoring(acoustic_model, nextsyllable_model, val_loader, blank_token, index_to_phoneme, phoneme_to_index, device)
 
+    # Calculate PER
+    greedy_per = calculate_per_with_jiwer(decoded_val_sequences, true_val_sequences)
+    rescored_per = calculate_per_with_jiwer(rescored_sequences, true_val_sequences)
 
+    print(f"Greedy 1 - PER: {1 - greedy_per:.3f}, Rescored 1 - PER: {1 - rescored_per:.3f}")
     #Finish W&B run
     wandb.finish()
 
