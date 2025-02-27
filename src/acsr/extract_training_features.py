@@ -74,14 +74,14 @@ def parse_args(args):
     parser.add_argument(
         '--path2coordinates',
         default=(
-          r"/scratch2/bsow/Documents/ACSR/output/extracted_coordinates"  
+          r"/scratch2/bsow/Documents/ACSR/output/extracted_coordinates_test"  
         ),
         help="Path to coordinate CSV files"
     )
     parser.add_argument(
         '--path2output',
         default=(
-            r"/scratch2/bsow/Documents/ACSR/output/extracted_features"
+            r"/scratch2/bsow/Documents/ACSR/output/extracted_features_test"
         ),
         help="Path to save feature CSV files"
     )

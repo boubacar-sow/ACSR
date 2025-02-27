@@ -58,7 +58,7 @@ def process_videos(show_video, path2data, path2output, num_videos):
         num_videos (int): Number of videos to process.
     """
     # Find all video paths
-    video_paths = glob.glob(os.path.join(path2data, "*", "*.mp4"))
+    video_paths = glob.glob(os.path.join(path2data, "*.mp4"))
     video_paths.sort()  # Sort alphabetically
 
     # Limit the number of videos to process
@@ -72,7 +72,7 @@ def process_videos(show_video, path2data, path2output, num_videos):
     print("Cpu count: ", cpu_count())
     import time
     time.sleep(5)   
-    with Pool(processes=4) as pool:
+    with Pool(processes=30) as pool:
         results = pool.starmap(
             process_single_video,
             [(fn_video, path2output, show_video) for fn_video in video_paths]
@@ -100,14 +100,14 @@ def parse_args(args):
     parser.add_argument(
         '--path2data',
         default=(
-            r"/scratch2/bsow/Documents/ACSR/data/training_videos/CSF22_train/mp4"
+            r"/scratch2/bsow/Documents/ACSR/data/training_videos/videos"
         ),
         help="Path to video files"
     )
     parser.add_argument(
         '--path2output',
         default=(
-            r"/scratch2/bsow/Documents/ACSR/output/extracted_coordinates"
+            r"/scratch2/bsow/Documents/ACSR/output/extracted_coordinates_train"
         ),
         help="Path to save output CSV files"
     )

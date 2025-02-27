@@ -42,6 +42,9 @@ class CuedSpeechProcessor:
         self.syllable_map = []
         self.current_video_frame = None
         self._validate_paths()
+        self.current_hand_pos = None
+        self.target_hand_pos = None
+        self.active_transition = None
 
     def _validate_paths(self):
         """Ensure required directories and files exist."""
@@ -81,11 +84,15 @@ class CuedSpeechProcessor:
 
     def _align_and_build_syllables(self, audio_path, text):
         """Align text and build syllable timeline"""
-        textgrid_path =  "/scratch2/bsow/Documents/ACSR/data/transcriptions/cuedspeech2.TextGrid" # self._run_mfa_alignment(audio_path, text)
+        textgrid_path = "/scratch2/bsow/Documents/ACSR/data/transcriptions/cuedspeech2.TextGrid"
         self.syllable_map = self._parse_textgrid(textgrid_path)
-        self.syllable_map.sort(key=lambda x: x[1])
+        
+        # Sort by start time using 'a1' key instead of tuple index
+        self.syllable_map.sort(key=lambda x: x['a1'])
+        
+        # Create syllable times list using dictionary keys
+        self.syllable_times = [item['a1'] for item in self.syllable_map]
         print(self.syllable_map)
-        self.syllable_times = [item[1] for item in self.syllable_map]
 
     def _run_mfa_alignment(self, audio_path, text):
         """Run Montreal Forced Aligner"""
@@ -141,7 +148,51 @@ class CuedSpeechProcessor:
                     i += 1
             else:
                 i += 1
-        return [(syl, start, end) for syl, start, end in syllables]
+        enhanced_syllables = []
+        prev_syllable_end = 0
+        for i, (syllable, start, end) in enumerate(syllables):
+            # Determine syllable type
+            if len(syllable) == 1:
+                syl_type = 'C' if syllable in consonants else 'V'
+            else:
+                syl_type = 'CV'
+            
+            # Calculate A1A3 duration in seconds
+            a1a3_duration = end - start
+            
+            # Determine context
+            from_neutral = (i == 0 or (start - prev_syllable_end) > 0.5)  # If pause >500ms
+            to_neutral = False  # Implement similar logic for end of utterance
+            
+            # Calculate M1 and M2 based on WP3 algorithm
+            if from_neutral:
+                m1 = start - (a1a3_duration * 1.60)
+                m2 = start - (a1a3_duration * 0.10)
+            elif to_neutral:
+                m1 = start - 0.03
+                m2 = m1 + 0.37
+            else:
+                if syl_type == 'C':
+                    m1 = start - (a1a3_duration * 1.60)
+                    m2 = start - (a1a3_duration * 0.30)
+                elif syl_type == 'V':
+                    m1 = start - (a1a3_duration * 2.40)
+                    m2 = start - (a1a3_duration * 0.60)
+                else:  # CV
+                    m1 = start - (a1a3_duration * 0.80)
+                    m2 = start + (a1a3_duration * 0.11)
+            
+            enhanced_syllables.append({
+                'syllable': syllable,
+                'a1': start,
+                'a3': end,
+                'm1': m1,
+                'm2': m2,
+                'type': syl_type
+            })
+            prev_syllable_end = end
+        
+        return enhanced_syllables
 
     def _add_audio(self, video_path, audio_path):
         """
@@ -196,23 +247,72 @@ class CuedSpeechProcessor:
         return output_path
 
     def _process_frame(self, current_time):
-        """Add hand cues to a single frame."""
         rgb_frame = cv2.cvtColor(self.current_video_frame, cv2.COLOR_BGR2RGB)
         results = face_mesh.process(rgb_frame)
+        
+        # Only process if face is detected
         if results.multi_face_landmarks:
             face_landmarks = results.multi_face_landmarks[0]
-            current_syllable = self._get_current_syllable(current_time)
-            if current_syllable:
-                self._render_hand_cue(face_landmarks, current_syllable)
+            
+            # Find active transition
+            self.active_transition = None
+            for syl in self.syllable_map:
+                if syl['m1'] <= current_time <= syl['m2']:
+                    self.active_transition = syl
+                    break
+            
+            if self.active_transition:
+                progress = (current_time - self.active_transition['m1']) / \
+                        (self.active_transition['m2'] - self.active_transition['m1'])
+                self._render_hand_transition(face_landmarks, progress)
+
+    def _render_hand_transition(self, face_landmarks, progress):
+        # Clamp progress between 0 and 1
+        progress = max(0.0, min(1.0, progress))
+        
+        # Rest of the method remains the same
+        target_shape, hand_pos_code = map_syllable_to_cue(self.active_transition['syllable'])
+        final_target = self._get_target_position(face_landmarks, hand_pos_code)
+        
+        if self.current_hand_pos is None:
+            self.current_hand_pos = final_target
+            return
+        
+        # Calculate intermediate position
+        new_x = self.current_hand_pos[0] + (final_target[0] - self.current_hand_pos[0]) * progress
+        new_y = self.current_hand_pos[1] + (final_target[1] - self.current_hand_pos[1]) * progress
+        intermediate_pos = (int(new_x), int(new_y))
+        
+        # Ensure we don't move to next transition until 95% complete
+        if progress < 0.95:
+            self.current_hand_pos = intermediate_pos
+        else:
+            self.current_hand_pos = final_target
+        
+        # Render at intermediate position
+        hand_image = self._load_hand_image(target_shape)
+        scale_factor = calculate_face_scale(face_landmarks, {"x_min": 0, "x_max": 1, "y_min": 0, "y_max": 1})
+        self.current_video_frame = self._overlay_hand_image(
+            self.current_video_frame,
+            hand_image,
+            intermediate_pos[0],
+            intermediate_pos[1],
+            scale_factor,
+            target_shape
+        )
+        
+        # Update final position if transition complete
+        if progress >= 1.0:
+            self.current_hand_pos = final_target
 
     def _get_current_syllable(self, current_time):
         """Binary search for current syllable."""
         pos = bisect_left(self.syllable_times, current_time)
         if pos == 0:
-            return None if current_time < self.syllable_map[0][1] else self.syllable_map[0][0]
+            return None if current_time < self.syllable_map[0]['a1'] else self.syllable_map[0]['syllable']
         if pos == len(self.syllable_times):
             return None
-        return self.syllable_map[pos - 1][0]
+        return self.syllable_map[pos - 1]['syllable']
 
     def _render_hand_cue(self, face_landmarks, syllable):
         """

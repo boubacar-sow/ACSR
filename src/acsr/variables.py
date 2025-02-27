@@ -57,7 +57,7 @@ HAND_ROTATIONS = {
 }
 
 # Dictionary mapping consonants to handshape numbers, LIAPHON notation
-consonant_to_handshape = {
+consonant_to_handshapes = {
     "b": 4, 
     "d": 1, 
     "f": 5, 
