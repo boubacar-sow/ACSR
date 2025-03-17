@@ -178,9 +178,9 @@ def extract_coordinates(cap, fn_video, show_video=False, verbose=True):
     # Initiate holistic model
     i_frame = 0
     with mp_holistic.Holistic(
-        min_detection_confidence=0.5, min_tracking_confidence=0.5,
+        min_detection_confidence=0.2, min_tracking_confidence=0.2,
         static_image_mode=False,  # Set to False for video processing
-        model_complexity=1,  # Adjust model complexity (0=light, 1=medium, 2=heavy)
+        model_complexity=2,  # Adjust model complexity (0=light, 1=medium, 2=heavy)
         enable_segmentation=False,  # Disable segmentation for faster processing
         smooth_landmarks=True,  # Smooth landmarks for better tracking
         refine_face_landmarks=True  # Refine face landmarks for better accuracy
@@ -259,87 +259,79 @@ def extract_coordinates(cap, fn_video, show_video=False, verbose=True):
 
 def extract_features(df_coords):
     """
-    Extract features from the coordinates DataFrame.
-
-    Args:
-        df_coords (pd.DataFrame): DataFrame containing hand, lip, and face landmarks.
-
-    Returns:
-        pd.DataFrame: DataFrame containing computed features.
+    Extract features from the coordinates DataFrame with corrected tangent calculation
+    and dual normalization (face width and hand span).
     """
     df_features = pd.DataFrame()
     df_features["fn_video"] = df_coords["fn_video"].copy()
     df_features["frame_number"] = df_coords["frame_number"]
-
-    # Normalization factor (face width)
+    
+    # Compute normalization factors
     face_width = get_distance(df_coords, "face_x454", "face_x234").mean()
-    norm_factor = face_width
-    print(f"Face width computed for normalization: {face_width}")
-
-    # HAND-FACE DISTANCES AND ANGLES
+    hand_span = get_distance(df_coords, "hand_x0", "hand_x12").mean()
+    
+    # Fallback to face width if hand span is invalid (e.g., no hand detected)
+    if np.isnan(hand_span) or hand_span == 0:
+        hand_span = face_width
+    
+    # HAND-FACE DISTANCES AND ANGLES (normalize by face width)
     position_index_pairs = get_index_pairs("position")
     for hand_index, face_index in position_index_pairs:
+        # Distance
         feature_name = f"distance_face{face_index}_hand{hand_index}"
         df_features[feature_name] = get_distance(
-            df_coords, f"face_x{face_index}", f"hand_x{hand_index}", norm_factor=norm_factor
+            df_coords, 
+            f"face_x{face_index}", 
+            f"hand_x{hand_index}", 
+            norm_factor=face_width  # Use face width for hand-face distances
         )
+        
+        # Angle calculation using arctan2(dy, dx) instead of dx/dy
+        dx = get_delta_dim(df_coords, f"face_x{face_index}", f"hand_x{hand_index}", "x", norm_factor=face_width)
+        dy = get_delta_dim(df_coords, f"face_x{face_index}", f"hand_x{hand_index}", "y", norm_factor=face_width)
+        angle_radians = np.arctan2(dy, dx)  # Bounded between -π and π
+        df_features[f"angle_face{face_index}_hand{hand_index}"] = angle_radians
 
-        dx = get_delta_dim(df_coords, f"face_x{face_index}", f"hand_x{hand_index}", "x", norm_factor=norm_factor)
-        dy = get_delta_dim(df_coords, f"face_x{face_index}", f"hand_x{hand_index}", "y", norm_factor=norm_factor)
-        df_features[f"tan_angle_face{face_index}_hand{hand_index}"] = dx / dy
-
-    # HAND-HAND DISTANCES (for hand shapes)
+    # HAND-HAND DISTANCES (normalize by hand span)
     shape_index_pairs = get_index_pairs("shape")
     for hand_index1, hand_index2 in shape_index_pairs:
         feature_name = f"distance_hand{hand_index1}_hand{hand_index2}"
         df_features[feature_name] = get_distance(
-            df_coords, f"hand_x{hand_index1}", f"hand_x{hand_index2}", norm_factor=norm_factor
+            df_coords, 
+            f"hand_x{hand_index1}", 
+            f"hand_x{hand_index2}", 
+            norm_factor=hand_span  # Use hand span for hand-hand distances
         )
-
-    # FINGER ANGLES (for hand shapes)
+    
+    # FINGER ANGLES (using normalized hand coordinates)
     df_features["thumb_index_angle"] = get_angle(
         df_coords["hand_x4"], df_coords["hand_y4"], df_coords["hand_z4"],
         df_coords["hand_x0"], df_coords["hand_y0"], df_coords["hand_z0"],
         df_coords["hand_x8"], df_coords["hand_y8"], df_coords["hand_z8"]
-    )
+    ) / hand_span  # Normalize by hand span
 
-    # LIP FEATURES
-    # Geometric features
-    df_features["lip_width"] = get_distance(df_coords, "lip_x61", "lip_x291", norm_factor=norm_factor)
-    df_features["lip_height"] = get_distance(df_coords, "lip_x0", "lip_x17", norm_factor=norm_factor)
-    df_features["lip_area"] = df_features["lip_width"] * df_features["lip_height"]  # Approximate area
-
-    # Lip curvature (angle between upper and lower lip landmarks)
-    df_features["lip_curvature"] = get_angle(
-        df_coords["lip_x61"], df_coords["lip_y61"], df_coords["lip_z61"],  # Left corner
-        df_coords["lip_x0"], df_coords["lip_y0"], df_coords["lip_z0"],    # Upper lip center
-        df_coords["lip_x17"], df_coords["lip_y17"], df_coords["lip_z17"]  # Lower lip center
-    )
-
-    # Lip asymmetry (difference in height between left and right sides)
-    left_lip_height = get_distance(df_coords, "lip_x61", "lip_x0", norm_factor=norm_factor)
-    right_lip_height = get_distance(df_coords, "lip_x291", "lip_x0", norm_factor=norm_factor)
-    df_features["lip_asymmetry"] = abs(left_lip_height - right_lip_height)
-
-    # Motion features
-    df_features["lip_velocity_x"] = df_coords["lip_x0"].diff()  # Velocity of upper lip center
-    df_features["lip_velocity_y"] = df_coords["lip_y0"].diff()
-    df_features["lip_acceleration_x"] = df_features["lip_velocity_x"].diff()  # Acceleration of upper lip center
-    df_features["lip_acceleration_y"] = df_features["lip_velocity_y"].diff()
-
-    # Lip opening/closing speed
-    df_features["lip_opening_speed"] = df_features["lip_height"].diff()
-
-    # Lip protrusion (z-axis movement)
-    df_features["lip_protrusion"] = df_coords["lip_z0"] - df_coords["face_z234"]
-
-    # Vertical/horizontal lip dominance
-    df_features["lip_motion_ratio"] = df_features["lip_velocity_y"].abs() / (df_features["lip_velocity_x"].abs() + 1e-6)
+    # LIP FEATURES (keep existing normalization by face width)
+    df_features["lip_width"] = get_distance(df_coords, "lip_x61", "lip_x291", norm_factor=face_width)
+    df_features["lip_height"] = get_distance(df_coords, "lip_x0", "lip_x17", norm_factor=face_width)
+    df_features["lip_area"] = df_features["lip_width"] * df_features["lip_height"]
     
-    # RELATIVE MOTION
-    df_features["hand8_velocity_x"] = df_coords["hand_x8"].diff()
-    df_features["hand8_velocity_y"] = df_coords["hand_y8"].diff()
-
+    # Lip curvature (normalize by face width)
+    df_features["lip_curvature"] = get_angle(
+        df_coords["lip_x61"], df_coords["lip_y61"], df_coords["lip_z61"],
+        df_coords["lip_x0"], df_coords["lip_y0"], df_coords["lip_z0"],
+        df_coords["lip_x17"], df_coords["lip_y17"], df_coords["lip_z17"]
+    ) / face_width
+    
+    # MOTION FEATURES (normalize velocities by face width)
+    df_features["lip_velocity_x"] = df_coords["lip_x0"].diff() / face_width
+    df_features["lip_velocity_y"] = df_coords["lip_y0"].diff() / face_width
+    df_features["lip_acceleration_x"] = df_features["lip_velocity_x"].diff()
+    df_features["lip_acceleration_y"] = df_features["lip_velocity_y"].diff()
+    
+    # Hand motion features (normalize by hand span)
+    df_features["hand8_velocity_x"] = df_coords["hand_x8"].diff() / hand_span
+    df_features["hand8_velocity_y"] = df_coords["hand_y8"].diff() / hand_span
+    
     return df_features
 
 

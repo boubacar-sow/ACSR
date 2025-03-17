@@ -2,6 +2,7 @@ import csv
 import os
 import sys
 import random
+import pickle
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -16,17 +17,17 @@ from torch.nn.utils.rnn import pad_sequence
 
 # Configuration
 CONFIG = {
-    "data_path": "/scratch2/bsow/Documents/ACSR/data/french_dataset/preprocessed_train.txt",
-    "vocab_path": "/scratch2/bsow/Documents/ACSR/data/french_dataset/vocab.txt",
-    "seq_length": 40,
-    "batch_size": 256,
+    "data_path": "/pasteur/appa/homes/bsow/ACSR/data/french_dataset/preprocessed_train.txt",
+    "vocab_path": "/pasteur/appa/homes/bsow/ACSR/data/french_dataset/vocab.txt",
+    "seq_length": 50,
+    "batch_size": 400,
     "embedding_dim": 128,
-    "hidden_dim": 256,
+    "hidden_dim": 512,
     "num_layers": 3,
     "dropout": 0.2,
     "learning_rate": 0.001,
-    "epochs": 300,
-    "teacher_forcing_initial": 0.7,   # initial teacher forcing ratio
+    "epochs": 400,
+    "teacher_forcing_initial": 0.8,   # initial teacher forcing ratio
     "teacher_forcing_min": 0.3,       # minimum teacher forcing ratio after annealing
     "device": "cuda" if torch.cuda.is_available() else "cpu",
     "special_tokens": ["<PAD>", "<SOS>", "<EOS>", "<UNK>"]
@@ -116,6 +117,7 @@ class Encoder(nn.Module):
         # src_mask: [batch, src_len] binary mask where 1 indicates a real token
         embedded = self.embedding(src)
         lengths = src_mask.sum(dim=1).cpu()  # compute actual lengths
+        
         packed = nn.utils.rnn.pack_padded_sequence(
             embedded, lengths, batch_first=True, enforce_sorted=False
         )
@@ -157,9 +159,9 @@ class Seq2Seq(nn.Module):
         self.device = device
         self.pad_idx = pad_idx
         
-    def forward(self, src, tgt, teacher_forcing_ratio=0.9):
-        batch_size = tgt.shape[0]
-        tgt_len = tgt.shape[1]
+    def forward(self, src, token_to_id, tgt=None, teacher_forcing_ratio=0.9, training=True):
+        batch_size = src.shape[0]
+        tgt_len = tgt.shape[1] if training else src.shape[1]+2
         tgt_vocab_size = self.decoder.fc.out_features
         
         outputs = torch.zeros(batch_size, tgt_len, tgt_vocab_size).to(self.device)
@@ -172,22 +174,35 @@ class Seq2Seq(nn.Module):
         # Build new mask: for each batch element, positions < length are True
         encoder_mask = torch.arange(max_len, device=self.device).unsqueeze(0) < lengths.to(self.device).unsqueeze(1)
         
-        decoder_input = tgt[:, 0].unsqueeze(1)  # initial input is <SOS>
+        sos_token = token_to_id["<SOS>"]
+        decoder_input = torch.full((batch_size, 1), sos_token, dtype=torch.long, device=self.device)
+        # Track sequences that have reached EOS
+        eos_mask = torch.zeros(batch_size, dtype=torch.bool, device=self.device)
+
         for t in range(1, tgt_len):
+            # Decode one step
             output, hidden, cell, _ = self.decoder(decoder_input, hidden, cell, encoder_outputs, encoder_mask)
             outputs[:, t] = output.squeeze(1)
-            teacher_force = random.random() < teacher_forcing_ratio
-            top1 = output.argmax(2)  # [batch, 1]
-            decoder_input = tgt[:, t].unsqueeze(1) if teacher_force else top1
-        return outputs
+            if training:
+                teacher_force = random.random() < teacher_forcing_ratio
+                decoder_input = tgt[:, t].unsqueeze(1) if teacher_force else output.argmax(2)
+            else:
+                decoder_input = output.argmax(2)
+                new_eos_mask = (decoder_input.squeeze(1) == token_to_id["<EOS>"])
+                eos_mask = eos_mask | new_eos_mask
+                if eos_mask.all():
+                    break
 
+            decoder_input = torch.where(eos_mask.unsqueeze(1), token_to_id["<EOS>"], decoder_input)
+
+        return outputs
 # ---------------- Data Generation Functions ----------------
 def generate_noisy_sequence(original_seq, vocab, vocab_list, max_changes=1):
-    operations = ["modify", "drop", "add"]
+    operations = ["modify", "drop", "add", "keep"]
     noisy_seq = original_seq.copy()
-    noisy_seq = noisy_seq[:CONFIG["seq_length"]]
     
-    num_changes = random.randint(1, max_changes)
+    num_changes = 1 if len(noisy_seq) > 40 else 2
+        
     for _ in range(num_changes):
         op = random.choice(operations)
         
@@ -212,17 +227,22 @@ def generate_noisy_sequence(original_seq, vocab, vocab_list, max_changes=1):
             new_syllable = random.choice(vocab_list)
             idx = random.randint(0, len(noisy_seq))
             noisy_seq.insert(idx, new_syllable)
+        elif op == "keep":
+            pass
 
     if len(noisy_seq) == 0:
         noisy_seq = original_seq.copy()  # Fallback to original sequence
-    return noisy_seq[:CONFIG["seq_length"]]
+    return noisy_seq
 
 def create_noisy_dataset(clean_sequences, vocab, vocab_list, num_samples_per_seq=1):
     pairs = []
     for seq in clean_sequences:
+        if len(seq) > CONFIG["seq_length"] or len(seq) <= 1:  # Skip empty sequences
+            continue
         for _ in range(num_samples_per_seq):
             noisy = generate_noisy_sequence(seq, vocab, vocab_list)
-            pairs.append((" ".join(noisy), " ".join(seq)))
+            if len(noisy) > 0:  # Ensure noisy sequence is not empty
+                pairs.append((" ".join(noisy), " ".join(seq)))
     return pairs
 
 def unique(sequence):
@@ -240,13 +260,14 @@ def load_and_preprocess_data(file_path):
     with open(file_path, "r", encoding="utf-8") as f:
         lines = f.readlines()
     clean_sequences = []
-    seq_length = CONFIG["seq_length"]
     for line in lines:
         line = line.strip().lower().replace("\n", "")
         if not line:
             continue
         syllables = line.split(' ')
-        chunk = syllables[:seq_length]
+        chunk = syllables
+        if len(chunk) < 8:
+            continue
         clean_sequences.append(chunk)
 
     print(f"Number of sequences: {len(clean_sequences)}")
@@ -259,13 +280,11 @@ def train_model(model, train_loader, val_loader, criterion, optimizer):
     initial_tf = CONFIG["teacher_forcing_initial"]
     tf_min = CONFIG["teacher_forcing_min"]
     total_epochs = CONFIG["epochs"]
-
+    import time
     for epoch in range(CONFIG["epochs"]):
+        start = time.time()
         # Anneal teacher forcing linearly over epochs
-        if epoch < 20:
-            teacher_forcing_ratio = max(0.7, 1 - ((1 - 0.7) * (epoch / 30)))
-        else:
-            teacher_forcing_ratio = max(tf_min, initial_tf - ((initial_tf - tf_min) * (epoch / total_epochs)))
+        teacher_forcing_ratio = max(tf_min, initial_tf - ((initial_tf - tf_min) * (epoch / total_epochs)))
         model.train()
         train_loss = 0
         for src, tgt, tgt_mask, _, _ in train_loader:
@@ -288,11 +307,12 @@ def train_model(model, train_loader, val_loader, criterion, optimizer):
             train_loss += loss.item()
         
         val_loss = evaluate_model(model, val_loader, criterion)
-        print(f"Epoch {epoch+1}/{CONFIG['epochs']} | Teacher Forcing: {teacher_forcing_ratio:.3f} | Train Loss: {train_loss/len(train_loader):.4f} | Val Loss: {val_loss:.4f}")
+        end = time.time()
+        print(f"Epoch {epoch+1}/{CONFIG['epochs']} | Teacher Forcing: {teacher_forcing_ratio:.3f} | Train Loss: {train_loss/len(train_loader):.4f} | Val Loss: {val_loss:.4f} | Time: {round(end - start, 2)} seq")
         sys.stdout.flush()
         if val_loss < best_loss:
             best_loss = val_loss
-            torch.save(model.state_dict(), "best_seq2seq_model_f2.pth")
+            torch.save(model.state_dict(), "/pasteur/appa/homes/bsow/ACSR/src/acsr/saved_models/best_seq2seq_model_last.pth")
 
 def evaluate_model(model, loader, criterion):
     model.eval()
@@ -302,7 +322,7 @@ def evaluate_model(model, loader, criterion):
             src, tgt = src.to(CONFIG["device"]), tgt.to(CONFIG["device"])
             tgt_mask = tgt_mask.to(CONFIG["device"])
             
-            output = model(src, tgt, teacher_forcing_ratio=0)  # no teacher forcing in eval
+            output = model(src, None, teacher_forcing_ratio=0, training=False)  # no teacher forcing in eval
             output_dim = output.shape[-1]
             loss = criterion(output.view(-1, output_dim), tgt.view(-1))
             loss = (loss.view(tgt.shape) * tgt_mask).sum() / tgt_mask.sum()
@@ -355,16 +375,18 @@ if __name__ == "__main__":
     print(f"Number of clean sequences: {len(clean_sequences)}")
     sys.stdout.flush()
 
-    noisy_pairs_path = "/scratch2/bsow/Documents/ACSR/data/french_dataset/noisy_pairs.csv"
+    noisy_pairs_path = "/pasteur/appa/homes/bsow/ACSR/data/french_dataset/noisy_pairs.csv"
     if os.path.exists(noisy_pairs_path):
         print("Loading noisy dataset from file...")
+        sys.stdout.flush()
         pairs = []
         with open(noisy_pairs_path, "r", encoding="utf-8") as f:
             reader = csv.reader(f, delimiter='\t')
             next(reader)  # Skip header
             for row in reader:
                 noisy, clean = row
-                pairs.append((noisy.split(' '), clean.split(' ')))
+                if len(noisy) > 0 and len(clean) > 0:
+                    pairs.append((noisy.split(' '), clean.split(' ')))
     else:
         print("Generating noisy dataset...")
         sys.stdout.flush()
@@ -376,20 +398,35 @@ if __name__ == "__main__":
 
     print("Pairs created. Number of pairs:", len(pairs))
     #train_pairs, val_pairs = train_test_split(pairs, test_size=0.1)
-    train_pairs = pairs[:int(len(pairs)*0.9)]
-    val_pairs = pairs[int(len(pairs)*0.9):]
+
+    indices_file = '/pasteur/appa/homes/bsow/ACSR/src/acsr/indices.pkl'
+    if os.path.exists(indices_file):
+        with open(indices_file, 'rb') as f:
+            indices = pickle.load(f)
+    else:
+        indices = list(range(len(pairs)))
+        random.shuffle(indices)
+        
+        with open(indices_file, 'wb') as f:
+            pickle.dump(indices, f)
+
+    # Split the pairs into training and validation sets using the indices
+    train_pairs = [pairs[i] for i in indices[:int(len(indices) * 0.9)] if len(pairs[i]) > 0]
+    val_pairs = [pairs[i] for i in indices[int(len(indices) * 0.9):] if len(pairs[i]) > 0]
+
     print("Number of training pairs:", len(train_pairs))
     print("Number of validation pairs:", len(val_pairs))
+    sys.stdout.flush()
     train_dataset = Seq2SeqDataset(train_pairs, token_to_id)
     val_dataset = Seq2SeqDataset(val_pairs, token_to_id)
     
     pad_token = token_to_id["<PAD>"]
     train_loader = DataLoader(
         train_dataset, batch_size=CONFIG["batch_size"], shuffle=True, 
-        collate_fn=lambda batch: collate_fn(batch, pad_token)
+        collate_fn=lambda batch: collate_fn(batch, pad_token), pin_memory=True, num_workers=6
     )
     val_loader = DataLoader(val_dataset, batch_size=CONFIG["batch_size"],
-        collate_fn=lambda batch: collate_fn(batch, pad_token)
+        collate_fn=lambda batch: collate_fn(batch, pad_token), pin_memory=True, num_workers=6
     )
     
     encoder = Encoder(len(token_to_id), CONFIG["embedding_dim"], 
@@ -397,7 +434,7 @@ if __name__ == "__main__":
     decoder = Decoder(len(token_to_id), CONFIG["embedding_dim"],
                       CONFIG["hidden_dim"], CONFIG["num_layers"], CONFIG["dropout"])
     model = Seq2Seq(encoder, decoder, CONFIG["device"], pad_token).to(CONFIG["device"])
-    model.load_state_dict(torch.load("/scratch2/bsow/Documents/ACSR/src/acsr/saved_models/best_seq2seq_model_f.pth"))
+    #model.load_state_dict(torch.load("best_seq2seq_model_long.pth"))
     
     optimizer = optim.Adam(model.parameters(), lr=CONFIG["learning_rate"])
     criterion = nn.CrossEntropyLoss(ignore_index=token_to_id["<PAD>"], reduction='none')

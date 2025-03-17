@@ -1,4 +1,7 @@
-# variables.py
+"""
+Variables module for the ACSR system.
+This module contains constants and mappings used across the system.
+"""
 
 # Define the mapping of consonants to hand shapes
 consonant_to_handshape = {
@@ -33,27 +36,6 @@ vowel_positions = {
     "œ̃": 5,
     "y": 5,
     "e": 5,
-}
-
-# Define hand connections
-HAND_CONNECTIONS = [
-    (0, 1), (1, 2), (2, 3), (3, 4),       # Thumb
-    (0, 5), (5, 6), (6, 7), (7, 8),       # Index finger
-    (0, 9), (9, 10), (10, 11), (11, 12),  # Middle finger
-    (0, 13), (13, 14), (14, 15), (15, 16),# Ring finger
-    (0, 17), (17, 18), (18, 19), (19, 20),# Pinky
-    (5, 9), (9, 13), (13, 17)             # Palm connections
-]
-
-HAND_ROTATIONS = {
-    1: 20,   # No rotation
-    2: 20,  # Rotate 30 degrees clockwise
-    3: 20,
-    4: 20,
-    5: 20,
-    6: 20,
-    7: 20,
-    8: 20 
 }
 
 # Dictionary mapping consonants to handshape numbers, LIAPHON notation
@@ -94,7 +76,42 @@ vowel_to_position = {
     "o~": 3,
     "u": 4, 
     "y": 5, 
-    "x": 1, 
+    "x": 2, 
     "x^": 1,
     "x~": 5,
+}
+
+# Define hand connections for visualization
+HAND_CONNECTIONS = [
+    (0, 1), (1, 2), (2, 3), (3, 4),       # Thumb
+    (0, 5), (5, 6), (6, 7), (7, 8),       # Index finger
+    (0, 9), (9, 10), (10, 11), (11, 12),  # Middle finger
+    (0, 13), (13, 14), (14, 15), (15, 16),# Ring finger
+    (0, 17), (17, 18), (18, 19), (19, 20),# Pinky
+    (5, 9), (9, 13), (13, 17)             # Palm connections
+]
+
+# Define hand rotations for visualization
+HAND_ROTATIONS = {
+    1: 20,   # No rotation
+    2: 20,  # Rotate 30 degrees clockwise
+    3: 20,
+    4: 20,
+    5: 20,
+    6: 20,
+    7: 20,
+    8: 20 
+}
+
+# IPA to target phoneme mapping
+IPA_TO_TARGET = {
+    # Vowels
+    "a": "a", "ɑ": "a", "ə": "x", "ɛ": "e^", "ø": "x", "œ": "x^", "i": "i", "y": "y", "e": "e",
+    "u": "u", "ɔ": "o", "o": "o^", "ɑ̃": "a~", "ɛ̃": "e~", "ɔ̃": "o~", "œ̃": "x~",
+    " ": " ",  # Space
+
+    # Consonants
+    "b": "b", "c": "k", "d": "d", "f": "f", "ɡ": "g", "j": "j", "k": "k", "l": "l", 
+    "m": "m", "n": "n", "p": "p", "s": "s", "t": "t", "v": "v", "w": "w", "z": "z", 
+    "ɥ": "h", "ʁ": "r", "ʃ": "s^", "ʒ": "z^", "ɲ": "gn", "ŋ": "ng"
 }

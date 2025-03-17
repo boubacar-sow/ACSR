@@ -163,8 +163,10 @@ def syllabify_ipa_worker(ipa_sentence):
     """
     Worker function for multiprocessing to syllabify IPA text.
     """
-    syllables = syllabify_ipa(ipa_sentence)
-    new_syllables = convert_ipa_to_syllables(" ".join(syllables), ipa_to_target)
+    #syllables = syllabify_ipa(ipa_sentence)
+    #new_syllables = convert_ipa_to_syllables(" ".join(syllables), ipa_to_target)
+    new_syllables = convert_ipa_to_syllables(ipa_sentence, ipa_to_target)
+    
     if "<UNK>" in new_syllables:
         return []
     return new_syllables

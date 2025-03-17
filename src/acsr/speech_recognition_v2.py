@@ -45,6 +45,7 @@ class CuedSpeechProcessor:
         self.current_hand_pos = None
         self.target_hand_pos = None
         self.active_transition = None
+        self.last_active_syllable = None
 
     def _validate_paths(self):
         """Ensure required directories and files exist."""
@@ -122,35 +123,49 @@ class CuedSpeechProcessor:
         Returns:
             list: A list of tuples mapping syllables to their intervals [(syllable, start, end)].
         """
-        consonants = set("ptkbdgmnlrsfvzʃʒɡʁjwŋtrɥgʀyc")
-        vowels = set("aeɛioɔuøœəɑ̃ɛ̃ɔ̃œ̃ɑ̃ɔ̃ɑ̃ɔ̃")
+        consonants = "ptkbdgmnlrsfvzʃʒɡʁjwŋtrɥgʀcɲ"
+        vowels = "aeɛioɔuøœyəɑ̃ɛ̃ɔ̃œ̃ɑ̃ɔ̃ɑ̃ɔ̃"
+        
         tg = tgio.openTextgrid(textgrid_path, includeEmptyIntervals=False)
         phone_tier = tg.getTier("phones")
         syllables = []
-
         i = 0
         while i < len(phone_tier.entries):
             start, end, phone = phone_tier.entries[i]
-            if phone in vowels:
-                syllables.append((phone, start, end))
-                i += 1
-            elif phone in consonants:
-                if i + 1 < len(phone_tier.entries):
-                    next_start, next_end, next_phone = phone_tier.entries[i + 1]
-                    if next_phone in vowels and abs(end - next_start) < 0.01:
-                        syllables.append((phone + next_phone, start, next_end))
-                        i += 2
-                    else:
-                        syllables.append((phone, start, end))
-                        i += 1
-                else:
-                    syllables.append((phone, start, end))
+            phone = list(phone)
+            if len(phone) == 2:
+                if phone[0] in vowels and phone[1] == "̃":
+                    syllables.append((phone[0] + phone[1], start, end))
                     i += 1
             else:
-                i += 1
+                if phone[0] in vowels:
+                    syllables.append((phone[0], start, end))
+                    i += 1
+                elif phone[0] in consonants:
+                    if i + 1 < len(phone_tier.entries):
+                        next_start, next_end, next_phone = phone_tier.entries[i + 1]
+                        next_phone = list(next_phone)
+                        if len(next_phone) == 2:
+                            if next_phone[0] in vowels and abs(end - next_start) < 0.01 and next_phone[1] == "̃":
+                                syllables.append((phone[0] + next_phone[0] + next_phone[1], start, next_end))
+                                i += 2
+                        else:
+                            if next_phone[0] in vowels and abs(end - next_start) < 0.01:
+                                syllables.append((phone[0] + next_phone[0], start, next_end))
+                                i += 2
+                            else:
+                                syllables.append((phone[0], start, end))
+                                i += 1
+                    else:
+                        syllables.append((phone[0], start, end))
+                        i += 1
+                else:
+                    print(f"Skipping phone: {phone[0]}, len phone {len(phone)}")
+                    i += 1
         enhanced_syllables = []
         prev_syllable_end = 0
         for i, (syllable, start, end) in enumerate(syllables):
+            print(syllable, start, end)
             # Determine syllable type
             if len(syllable) == 1:
                 syl_type = 'C' if syllable in consonants else 'V'
@@ -191,6 +206,32 @@ class CuedSpeechProcessor:
                 'type': syl_type
             })
             prev_syllable_end = end
+
+        # In your _parse_textgrid method, after calculating m1 and m2:
+        MIN_DISPLAY_DURATION = 0.4  # 250ms minimum display time
+        for i in range(len(enhanced_syllables)):
+            syl = enhanced_syllables[i]
+            current_duration = syl['m2'] - syl['m1']
+            
+            # If transition is too fast, extend it
+            if current_duration < MIN_DISPLAY_DURATION:
+                # For consonants, prioritize extending
+                extension_needed = MIN_DISPLAY_DURATION - current_duration
+                syl['m2'] = syl['m1'] + MIN_DISPLAY_DURATION
+
+        # After building enhanced_syllables, enforce non-overlapping transition windows.
+        for i in range(1, len(enhanced_syllables)):
+            prev = enhanced_syllables[i - 1]
+            curr = enhanced_syllables[i]
+            # Ensure that the new syllable's m1 is not before the previous syllable's m2.
+            if curr['m1'] < prev['m2']:
+                # Adjust m1 upward to the previous m2.
+                curr['m1'] = prev['m2']
+                # Optionally, adjust m2 to maintain the same transition window duration ratio:
+                duration = curr['m2'] - curr['m1']
+                # Here you might choose a strategy (e.g., keep m2 unchanged or set m2 = m1 + original_duration)
+                # For now, we simply leave m2 as is.
+        
         
         return enhanced_syllables
 
@@ -250,11 +291,10 @@ class CuedSpeechProcessor:
         rgb_frame = cv2.cvtColor(self.current_video_frame, cv2.COLOR_BGR2RGB)
         results = face_mesh.process(rgb_frame)
         
-        # Only process if face is detected
         if results.multi_face_landmarks:
             face_landmarks = results.multi_face_landmarks[0]
             
-            # Find active transition
+            # Find active transition for the current time
             self.active_transition = None
             for syl in self.syllable_map:
                 if syl['m1'] <= current_time <= syl['m2']:
@@ -262,48 +302,59 @@ class CuedSpeechProcessor:
                     break
             
             if self.active_transition:
-                progress = (current_time - self.active_transition['m1']) / \
-                        (self.active_transition['m2'] - self.active_transition['m1'])
+                progress = (current_time - self.active_transition['m1']) / (self.active_transition['m2'] - self.active_transition['m1'])
                 self._render_hand_transition(face_landmarks, progress)
+            else:
+                # If no new gesture is active, persist the last hand position 
+                # as long as the last syllable is not the final syllable of the sentence.
+                if self.current_hand_pos is not None and \
+                self.last_active_syllable is not None and \
+                self.last_active_syllable != self.syllable_map[-1]:
+                    hand_shape, hand_pos_code = map_syllable_to_cue(self.last_active_syllable['syllable'])
+                    hand_image = self._load_hand_image(hand_shape)
+                    scale_factor = calculate_face_scale(face_landmarks, {"x_min": 0, "x_max": 1, "y_min": 0, "y_max": 1})
+                    self.current_video_frame = self._overlay_hand_image(
+                        self.current_video_frame,
+                        hand_image,
+                        self.current_hand_pos[0],
+                        self.current_hand_pos[1],
+                        scale_factor,
+                        hand_shape
+                    )
 
     def _render_hand_transition(self, face_landmarks, progress):
-        # Clamp progress between 0 and 1
-        progress = max(0.0, min(1.0, progress))
-        
-        # Rest of the method remains the same
-        target_shape, hand_pos_code = map_syllable_to_cue(self.active_transition['syllable'])
-        final_target = self._get_target_position(face_landmarks, hand_pos_code)
-        
-        if self.current_hand_pos is None:
-            self.current_hand_pos = final_target
-            return
-        
-        # Calculate intermediate position
-        new_x = self.current_hand_pos[0] + (final_target[0] - self.current_hand_pos[0]) * progress
-        new_y = self.current_hand_pos[1] + (final_target[1] - self.current_hand_pos[1]) * progress
-        intermediate_pos = (int(new_x), int(new_y))
-        
-        # Ensure we don't move to next transition until 95% complete
-        if progress < 0.95:
-            self.current_hand_pos = intermediate_pos
-        else:
-            self.current_hand_pos = final_target
-        
-        # Render at intermediate position
-        hand_image = self._load_hand_image(target_shape)
-        scale_factor = calculate_face_scale(face_landmarks, {"x_min": 0, "x_max": 1, "y_min": 0, "y_max": 1})
-        self.current_video_frame = self._overlay_hand_image(
-            self.current_video_frame,
-            hand_image,
-            intermediate_pos[0],
-            intermediate_pos[1],
-            scale_factor,
-            target_shape
-        )
-        
-        # Update final position if transition complete
-        if progress >= 1.0:
-            self.current_hand_pos = final_target
+            progress = max(0.0, min(1.0, progress))
+            target_shape, hand_pos_code = map_syllable_to_cue(self.active_transition['syllable'])
+            final_target = self._get_target_position(face_landmarks, hand_pos_code)
+            
+            if self.current_hand_pos is None:
+                self.current_hand_pos = final_target
+                self.last_active_syllable = self.active_transition  # <<-- Store last syllable
+                return
+            
+            
+            new_x = self.current_hand_pos[0] + (final_target[0] - self.current_hand_pos[0]) * progress
+            new_y = self.current_hand_pos[1] + (final_target[1] - self.current_hand_pos[1]) * progress
+            intermediate_pos = (int(new_x), int(new_y))
+            
+            if progress < 0.95:
+                self.current_hand_pos = intermediate_pos
+            else:
+                self.current_hand_pos = final_target
+            
+            hand_image = self._load_hand_image(target_shape)
+            scale_factor = calculate_face_scale(face_landmarks, {"x_min": 0, "x_max": 1, "y_min": 0, "y_max": 1})
+            self.current_video_frame = self._overlay_hand_image(
+                self.current_video_frame,
+                hand_image,
+                intermediate_pos[0],
+                intermediate_pos[1],
+                scale_factor,
+                target_shape
+            )
+            
+            # Store the syllable that is currently active
+            self.last_active_syllable = self.active_transition
 
     def _get_current_syllable(self, current_time):
         """Binary search for current syllable."""
@@ -411,8 +462,8 @@ class CuedSpeechProcessor:
             target_x = face_landmarks.landmark[57].x * frame_width - 0.06 * frame_width
             target_y = face_landmarks.landmark[57].y * frame_height
         elif hand_pos == -2:
-            target_x = face_landmarks.landmark[118].x * frame_width
-            target_y = face_landmarks.landmark[118].y * frame_height + 0.04 * frame_height
+            target_x = face_landmarks.landmark[152].x * frame_width
+            target_y = face_landmarks.landmark[152].y * frame_height + 0.06 * frame_height
         else:
             target_x = face_landmarks.landmark[hand_pos].x * frame_width
             target_y = face_landmarks.landmark[hand_pos].y * frame_height

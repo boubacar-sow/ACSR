@@ -6,7 +6,7 @@ authors = ["Boubacar Sow <boubasow.pro@gmail.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "3.11.7"
+python = "3.11.5"
 keras = "^3.7.0"
 matplotlib = "^3.10.0"
 praat-textgrids = "^1.4.0"
@@ -50,6 +50,11 @@ huggingface-hub = "^0.28.0"
 flashlight-text = "^0.0.7"
 kenlm = "^0.2.0"
 conformer = "^0.3.2"
+pytorch-gpu = "^0.0.1"
+torch = {version = "^2.6.0", source = "pytorch_gpu"}
+torchvision = {version = "^0.21.0", source = "pytorch_gpu"}
+plotly = "^6.0.0"
+seaborn = "^0.13.2"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -64,6 +69,12 @@ priority = "explicit"
 
 [[tool.poetry.source]]
 name = "pytorch-gpu"
+url = "https://download.pytorch.org/whl/cu118"
+priority = "explicit"
+
+
+[[tool.poetry.source]]
+name = "pytorch_gpu"
 url = "https://download.pytorch.org/whl/cu118"
 priority = "explicit"
 

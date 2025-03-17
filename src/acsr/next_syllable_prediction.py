@@ -19,13 +19,13 @@ from decoder_lm import text_to_ipa, syllabify_ipa, convert_ipa_to_syllables
 
 # Configuration
 CONFIG = { 
-    "preprocessed_train_path": "/scratch2/bsow/Documents/ACSR/data/french_dataset/preprocessed_train.txt",
-    "preprocessed_val_path": "/scratch2/bsow/Documents/ACSR/data/french_dataset/preprocessed_val.txt",
-    "data_train_path": "/scratch2/bsow/Documents/ACSR/data/french_dataset/concat_train.csv",
-    "data_val_path": "/scratch2/bsow/Documents/ACSR/data/french_dataset/eval.csv",
-    "preprocessed_path": "/scratch2/bsow/Documents/ACSR/data/news_dataset/preprocessed_syllables.txt",
+    "preprocessed_train_path": "/pasteur/appa/homes/bsow/ACSR/data/french_dataset/preprocessed_train.txt",
+    "preprocessed_val_path": "/pasteur/appa/homes/bsow/ACSR/data/french_dataset/preprocessed_val.txt",
+    "data_train_path": "/pasteur/appa/homes/bsow/ACSR/data/french_dataset/concat_train.csv",
+    "data_val_path": "/pasteur/appa/homes/bsow/ACSR/data/french_dataset/eval.csv",
+    "preprocessed_path": "/pasteur/appa/homes/bsow/ACSR/data/news_dataset/preprocessed_syllables.txt",
     "seq_length": 15,
-    "batch_size": 1024,
+    "batch_size": 2048,
     "embedding_dim": 200,
     "hidden_dim": 512,
     "num_layers": 4,
@@ -97,8 +97,7 @@ def load_and_clean_data(file_path):
 def process_single_sentence(sentence, IPA_TO_TARGET):
     """Process a single sentence into IPA syllables"""
     ipa = text_to_ipa(sentence)
-    syllables = syllabify_ipa(ipa)
-    new_syllables = convert_ipa_to_syllables(" ".join(syllables), IPA_TO_TARGET)
+    new_syllables = convert_ipa_to_syllables(ipa, IPA_TO_TARGET)
     if "<UNK>" in new_syllables:
         return []
     return new_syllables
@@ -110,12 +109,14 @@ def preprocess_data():
     
     if train_cached and val_cached:
         print("Loading preprocessed data...")
+        sys.stdout.flush()
         return (
             load_preprocessed(CONFIG['preprocessed_train_path']),
             load_preprocessed(CONFIG['preprocessed_val_path'])
         )
     
     print("Preprocessing data...")
+    sys.stdout.flush()
     # Process training data
     train_text = load_and_clean_data(CONFIG['data_train_path'])
     with multiprocessing.Pool(20) as pool:
@@ -157,20 +158,20 @@ def build_vocab(train_syllables):
     import csv
     # Filter and sort vocabulary
     #vocab = CONFIG['special_tokens'].copy()
-    # load all the syllables from /scratch2/bsow/Documents/ACSR/data/training_videos/syllables.txt
-    with open(r"/scratch2/bsow/Documents/ACSR/data/news_dataset/vocab.txt", "r") as file:
+    # load all the syllables from /pasteur/appa/homes/bsow/ACSR/data/training_videos/syllables.txt
+    with open(r"/pasteur/appa/homes/bsow/ACSR/data/french_dataset/vocab.txt", "r") as file:
         reader = csv.reader(file)
         vocabulary_list = [row[0] for row in reader]
     vocab = unique(vocabulary_list)
     #vocab = unique(vocab)
-    #valid_syllables = [syl for sequence in train_syllables for syl in sequence]
-    #valid_syllables = unique(valid_syllables)
-    #vocab += valid_syllables
-    #vocab = unique(vocab)
-    ## save the vocab to /scratch2/bsow/Documents/ACSR/data/news_dataset/vocab.txt
-    #with open("/scratch2/bsow/Documents/ACSR/data/french_dataset/vocab.txt", "w") as f:
-    #    for syl in vocab:
-    #        f.write(syl + "\n")
+    valid_syllables = [syl for sequence in train_syllables for syl in sequence]
+    valid_syllables = unique(valid_syllables)
+    vocab += valid_syllables
+    vocab = unique(vocab)
+    # save the vocab to /pasteur/appa/homes/bsow/ACSR/data/news_dataset/vocab.txt
+    with open("/pasteur/appa/homes/bsow/ACSR/data/french_dataset/vocab2.txt", "w") as f:
+        for syl in vocab:
+            f.write(syl + "\n")
     
     return {syl: idx for idx, syl in enumerate(vocab)}, vocab
 
@@ -186,7 +187,7 @@ def create_datasets(train_syllables, val_syllables, syllable_to_idx):
                 seq = tokens[start_idx:i+1]
                 padded = ['<PAD>'] * (CONFIG['seq_length'] - len(seq)) + seq
                 non_special = [t for t in padded if t not in ['<PAD>', '<SOS>']]
-                if len(non_special) < 3:
+                if len(non_special) < 5:
                     continue
                 sequences.append((padded, tokens[i+1]))
         return sequences
@@ -201,8 +202,8 @@ def create_datasets(train_syllables, val_syllables, syllable_to_idx):
 def train_model(train_dataset, val_dataset, model):
     wandb.init(project="ipa-syllable-prediction", config=CONFIG)
     
-    train_loader = DataLoader(train_dataset, batch_size=CONFIG['batch_size'], shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=CONFIG['batch_size'], shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=CONFIG['batch_size'], shuffle=True, num_workers=10, pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size=CONFIG['batch_size'], shuffle=False, num_workers=10, pin_memory=True)
     
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=CONFIG['learning_rate'], weight_decay=1e-5)
@@ -295,8 +296,8 @@ def train_model(train_dataset, val_dataset, model):
         # Save best model using correct val loss
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
-            torch.save(model.state_dict(), "best_syllable_model_def3.pth")
-            wandb.save("best_syllable_model_def3.pth")
+            torch.save(model.state_dict(), "syllable_model_last.pth")
+            wandb.save("syllable_model_last.pth")
             
 if __name__ == "__main__":
     # Load and preprocess data
@@ -306,14 +307,15 @@ if __name__ == "__main__":
     syllable_to_idx, vocab = build_vocab(train_syllables)
     # Create reverse vocabulary mapping
     idx_to_syllable = {v: k for k, v in syllable_to_idx.items()}
-
+#
     CONFIG["vocab_size"] = len(vocab)
     print(f"Vocabulary size: {len(vocab)}")
     print(syllable_to_idx)
- 
+    sys.stdout.flush()
     # Create datasets
     train_dataset, val_dataset = create_datasets(train_syllables, val_syllables, syllable_to_idx)
-#   
+    print("Len train dataset: ", len(train_dataset))
+    print("Len val dataset: ", len(val_dataset))
     # print samples from the dataset
     print("Train dataset samples:")
     for i in range(10):
@@ -322,7 +324,7 @@ if __name__ == "__main__":
     for i in range(10):
         print([idx_to_syllable[idx] for idx in val_dataset[i][0].numpy()])
     sys.stdout.flush()
-#
+##
     # Initialize model
     model = NextSyllableLSTM(
         vocab_size=len(vocab),
@@ -335,10 +337,10 @@ if __name__ == "__main__":
     # Start training
     wandb.login(key="580ab03d7111ed25410f9831b06b544b5f5178a2")
     # load model
-    model.load_state_dict(torch.load("best_syllable_model_def2.pth"))
-
-    train_model(train_dataset, val_dataset, model)
+    #model.load_state_dict(torch.load("best_syllable_model_def2.pth"))
 #
+    train_model(train_dataset, val_dataset, model)
+##
     model.eval()
     
     # Select 5 random validation samples
