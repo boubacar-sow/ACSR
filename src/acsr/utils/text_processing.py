@@ -6,7 +6,7 @@ This module contains functions for processing text, syllables, and phonemes.
 from ..variables import consonant_to_handshapes, vowel_to_position
 
 
-def syllabify_ipa(ipa_text):
+def syllabify_liaphon(ipa_text):
     """
     Convert IPA text to syllables.
     
@@ -49,6 +49,86 @@ def syllabify_ipa(ipa_text):
             i += 1
     return syllables
 
+def syllabify_ipa(ipa_text):
+    consonants = "ptkbdgmnlrsfvzʃʒɡʁjwŋtrɥgʀycɲ"
+    vowels = "aeɛioɔuøœəɑ̃ɛ̃ɔ̃œ̃ɑ̃ɔ̃ɑ̃ɔ̃"
+    phonemes = list(ipa_text.replace(" ", ""))
+    syllables = []
+    i = 0
+
+    while i < len(phonemes):
+        phone = phonemes[i]
+        if phone in vowels:
+            # Check if the next character is a combining diacritic
+            if i + 1 < len(phonemes) and phonemes[i + 1] == "̃":  # Corrected: No space after tilde
+                syllable = phone + phonemes[i + 1]  # Combine base character with diacritic
+                syllables.append(syllable)
+                i += 2  # Skip the diacritic in the next iteration
+            else:
+                syllables.append(phone)
+                i += 1
+        elif phone in consonants:
+            # Check if there is a next phone
+            if i + 1 < len(phonemes):
+                next_phone = phonemes[i + 1]
+                if next_phone in vowels:
+                    # Check if the vowel has a combining diacritic
+                    if i + 2 < len(phonemes) and phonemes[i + 2] == "̃":  # Corrected: No space after tilde
+                        syllable = phone + next_phone + phonemes[i + 2]  # Combine consonant, vowel, and diacritic
+                        syllables.append(syllable)
+                        i += 3  # Skip the diacritic in the next iteration
+                    else:
+                        syllable = phone + next_phone
+                        syllables.append(syllable)
+                        i += 2
+                else:
+                    syllables.append(phone)
+                    i += 1
+            else:
+                syllables.append(phone)
+                i += 1
+        else:
+            i += 1
+
+    return syllables
+
+def text_to_ipa(text, language="fr"):
+    """
+    Convert text to IPA using espeak-ng.
+    """
+    # Remove special characters
+    #text = text.replace("?", "").replace("!", "").replace(".", "").replace(",", "").replace(":", "").replace(";", "").replace("'", "").replace("-", " ")
+
+    command = ["espeak-ng", "-v", language, "-q", "--ipa"]
+    process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stdout, stderr = process.communicate(input=text.encode())
+    ipa_output = stdout.decode().strip()
+    ipa_output = ipa_output.replace("ˈ", "").replace("ˌ", "").replace("-", "").replace("\n", " ").replace("(en)", "").replace("(fr)", "")
+
+    return ipa_output
+
+import re
+
+def convert_ipa_to_liaphon(ipa_text, ipa_to_target):
+    # Step 1: Convert IPA phonemes to target phonemes
+    converted_text = []
+    i = 0
+    while i < len(ipa_text):
+        char = ipa_text[i]
+        # Check if the next character is a combining diacritic
+        if i + 1 < len(ipa_text) and ipa_text[i + 1] == "̃":
+            # Combine the base character with the diacritic
+            combined_char = char + ipa_text[i + 1]
+            # Map the combined character if it exists in the dictionary
+            mapped_char = ipa_to_target.get(combined_char, combined_char)
+            converted_text.append(mapped_char)
+            i += 2  # Skip the diacritic in the next iteration
+        else:
+            # Map the single character
+            mapped_char = ipa_to_target.get(char, "<UNK>")
+            converted_text.append(mapped_char)
+            i += 1
+    return "".join(converted_text)
 
 def syllables_to_gestures(syllable_sequence):
     """

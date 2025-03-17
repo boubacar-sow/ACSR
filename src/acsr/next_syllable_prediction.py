@@ -15,7 +15,7 @@ import wandb
 import multiprocessing
 import sys
 from functools import partial
-from decoder_lm import text_to_ipa, syllabify_ipa, convert_ipa_to_syllables
+from decoder_lm import text_to_ipa, convert_ipa_to_liaphon
 
 # Configuration
 CONFIG = { 
@@ -97,7 +97,7 @@ def load_and_clean_data(file_path):
 def process_single_sentence(sentence, IPA_TO_TARGET):
     """Process a single sentence into IPA syllables"""
     ipa = text_to_ipa(sentence)
-    new_syllables = convert_ipa_to_syllables(ipa, IPA_TO_TARGET)
+    new_syllables = convert_ipa_to_liaphon(ipa, IPA_TO_TARGET)
     if "<UNK>" in new_syllables:
         return []
     return new_syllables

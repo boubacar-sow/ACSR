@@ -51,10 +51,6 @@ flashlight-text = "^0.0.7"
 kenlm = "^0.2.0"
 conformer = "^0.3.2"
 pytorch-gpu = "^0.0.1"
-torch = {version = "^2.6.0", source = "pytorch_gpu"}
-torchvision = {version = "^0.21.0", source = "pytorch_gpu"}
-plotly = "^6.0.0"
-seaborn = "^0.13.2"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -81,3 +77,6 @@ priority = "explicit"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.extras]
+testing = ["pytest", "sphinx", "torch", "pandas", "jiwer"]

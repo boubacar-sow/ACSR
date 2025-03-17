@@ -19,9 +19,6 @@ __location__ = os.path.dirname(__file__)
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 sys.path.insert(0, os.path.join(__location__, "../src"))
-sys.path.insert(0, os.path.join(__location__, "../src/acsr"))
-sys.path.insert(0, os.path.join(__location__, "../../.."))
-
 
 # -- Run sphinx-apidoc -------------------------------------------------------
 # This hack is necessary since RTD does not issue `sphinx-apidoc` before running
@@ -91,7 +88,7 @@ master_doc = "index"
 
 # General information about the project.
 project = "ACSR"
-copyright = "2024, Boubacar Sow"
+copyright = "2025, boubacar-sow"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -249,7 +246,7 @@ latex_elements = {
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass [howto/manual]).
 latex_documents = [
-    ("index", "user_guide.tex", "ACSR Documentation", "Boubacar Sow", "manual")
+    ("index", "user_guide.tex", "ACSR Documentation", "boubacar-sow", "manual")
 ]
 
 # The name of an image file (relative to this directory) to place at the top of

@@ -2,8 +2,8 @@ import pytest
 
 from acsr.skeleton import fib, main
 
-__author__ = "Boubacar Sow"
-__copyright__ = "Boubacar Sow"
+__author__ = "boubacar-sow"
+__copyright__ = "boubacar-sow"
 __license__ = "MIT"
 
 

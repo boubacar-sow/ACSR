@@ -10,7 +10,7 @@ import torch
 from torch.utils.data import Dataset
 from collections import Counter
 
-from ..utils.text_processing import syllabify_ipa
+from ..utils.text_processing import syllabify_liaphon
 
 
 class SyllableDataset(Dataset):
@@ -154,7 +154,7 @@ def prepare_data_for_videos_no_sliding_windows(base_names, phoneme_files, featur
                 raise FileNotFoundError(f"Phoneme label file not found: {labels_path}")
             
             phoneme_labels = pd.read_csv(labels_path, header=None).squeeze().tolist()[1:-1]
-            syllable_labels = ["<SOS>"] + syllabify_ipa(" ".join(phoneme_labels)) + ["<EOS>"]
+            syllable_labels = ["<SOS>"] + syllabify_liaphon(" ".join(phoneme_labels)) + ["<EOS>"]
             
             # Convert to indices
             syllable_indices = []

@@ -2,4 +2,4 @@
 Contributors
 ============
 
-* Boubacar Sow <boubasow.pro@gmail.com>
+* boubacar-sow <boubasow.pro@gmail.com>

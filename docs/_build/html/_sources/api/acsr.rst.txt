@@ -1,125 +1,159 @@
 acsr package
 ============
 
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   acsr.data
+   acsr.models
+   acsr.utils
+
 Submodules
 ----------
 
-acsr.add\_shape\_and\_pos\_to\_events\_files module
----------------------------------------------------
+acsr.config module
+------------------
 
-.. automodule:: acsr.add_shape_and_pos_to_events_files
+.. automodule:: acsr.config
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
-acsr.create\_training\_videos\_from\_word\_videos module
---------------------------------------------------------
+acsr.decode module
+------------------
 
-.. automodule:: acsr.create_training_videos_from_word_videos
+.. automodule:: acsr.decode
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
+
+acsr.decoding module
+--------------------
+
+.. automodule:: acsr.decoding
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+acsr.decoding copy 2 module
+---------------------------
+
+.. automodule:: acsr.decoding copy 2
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+acsr.decoding\_grid\_search module
+----------------------------------
+
+.. automodule:: acsr.decoding_grid_search
+   :members:
+   :show-inheritance:
+   :undoc-members:
 
 acsr.extract\_training\_coordinates module
 ------------------------------------------
 
 .. automodule:: acsr.extract_training_coordinates
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 acsr.extract\_training\_features module
 ---------------------------------------
 
 .. automodule:: acsr.extract_training_features
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
-acsr.extract\_wav\_from\_video module
--------------------------------------
+acsr.main module
+----------------
 
-.. automodule:: acsr.extract_wav_from_video
+.. automodule:: acsr.main
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
-acsr.find\_onsets module
+acsr.next\_syllable\_prediction module
+--------------------------------------
+
+.. automodule:: acsr.next_syllable_prediction
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+acsr.next\_word\_prediction module
+----------------------------------
+
+.. automodule:: acsr.next_word_prediction
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+acsr.seq\_to\_seq module
 ------------------------
 
-.. automodule:: acsr.find_onsets
+.. automodule:: acsr.seq_to_seq
    :members:
-   :undoc-members:
    :show-inheritance:
-
-acsr.mark\_video module
------------------------
-
-.. automodule:: acsr.mark_video
-   :members:
    :undoc-members:
-   :show-inheritance:
-
-acsr.plot\_mfa module
----------------------
-
-.. automodule:: acsr.plot_mfa
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-acsr.plot\_probs module
------------------------
-
-.. automodule:: acsr.plot_probs
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-acsr.predict module
--------------------
-
-.. automodule:: acsr.predict
-   :members:
-   :undoc-members:
-   :show-inheritance:
 
 acsr.skeleton module
 --------------------
 
 .. automodule:: acsr.skeleton
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
+
+acsr.speech\_recognition\_v1 module
+-----------------------------------
+
+.. automodule:: acsr.speech_recognition_v1
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+acsr.speech\_recognition\_v2 module
+-----------------------------------
+
+.. automodule:: acsr.speech_recognition_v2
+   :members:
+   :show-inheritance:
+   :undoc-members:
 
 acsr.train module
 -----------------
 
 .. automodule:: acsr.train
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 acsr.utils module
 -----------------
 
 .. automodule:: acsr.utils
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
-acsr.viz module
----------------
+acsr.variables module
+---------------------
 
-.. automodule:: acsr.viz
+.. automodule:: acsr.variables
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 Module contents
 ---------------
 
 .. automodule:: acsr
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
